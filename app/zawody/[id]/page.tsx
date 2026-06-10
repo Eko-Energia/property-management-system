@@ -26,7 +26,11 @@ import {
   X,
   Settings,
   Plus,
-  Minus
+  Minus,
+  LayoutDashboard,
+  Check,
+  Search,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface ExtendedConsumableItem {
@@ -99,8 +103,22 @@ export default function EventPackingPage() {
     isOpen: boolean;
     consumable: DatabaseConsumable;
     existingEventConsumable?: ExtendedConsumableItem;
+    targetBoxId?: number;
   } | null>(null);
   const [qtyToPack, setQtyToPack] = useState<string>('1');
+
+  // Redesign: Tabs, Filters, Sort and Scanner Target
+  const [activeTab, setActiveTab] = useState<'items' | 'consumables'>('items');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortKey, setSortKey] = useState<string>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [scanTargetBoxId, setScanTargetBoxId] = useState<string>('');
+
+  useEffect(() => {
+    if (boxes.length > 0 && !scanTargetBoxId) {
+      setScanTargetBoxId(boxes[0].id.toString());
+    }
+  }, [boxes, scanTargetBoxId]);
 
   // 2. Edit Chest Modal
   const [isBoxEditModalOpen, setIsBoxEditModalOpen] = useState<boolean>(false);
@@ -192,10 +210,6 @@ export default function EventPackingPage() {
       const boxesRes = await supabase.from('locations').select('*').eq('event_id', eventId).eq('type', 'event_box');
       const loadedBoxes = boxesRes.data || [];
       setBoxes(loadedBoxes);
-      
-      if (loadedBoxes.length > 0 && !activeBoxId) {
-        setActiveBoxId(loadedBoxes[0].id);
-      }
 
       // Fetch items assigned to this event
       const boxIds = loadedBoxes.map(b => b.id);
@@ -244,7 +258,6 @@ export default function EventPackingPage() {
       
       setEvent(mockEvent);
       setBoxes(mockBoxes);
-      setActiveBoxId(activeBoxId || mockBoxes[0].id);
       setItems(mockItems.filter(i => i.status !== 'in_workshop'));
       setWorkshopItems(mockItems.filter(i => i.status === 'in_workshop'));
       setPermanentLocations(mockPermanentLocations);
@@ -410,8 +423,7 @@ export default function EventPackingPage() {
       setConsumablesList(prev => prev.filter(ec => ec.locationId !== boxId));
       
       if (activeBoxId === boxId) {
-        const remaining = boxes.filter(b => b.id !== boxId);
-        setActiveBoxId(remaining.length > 0 ? remaining[0].id : null);
+        setActiveBoxId(null);
       }
       setIsBoxEditModalOpen(false);
       setModalLoading(false);
@@ -423,8 +435,9 @@ export default function EventPackingPage() {
       if (error) throw error;
 
       setIsBoxEditModalOpen(false);
-      const remaining = boxes.filter(b => b.id !== boxId);
-      setActiveBoxId(remaining.length > 0 ? remaining[0].id : null);
+      if (activeBoxId === boxId) {
+        setActiveBoxId(null);
+      }
       fetchData();
     } catch (err: any) {
       alert('Błąd usuwania skrzyni: ' + err.message);
@@ -867,7 +880,9 @@ export default function EventPackingPage() {
     setScanSuccess(null);
     setScannedItem(null);
 
-    if (!activeBoxId) {
+    const targetBoxId = activeBoxId || parseInt(scanTargetBoxId);
+
+    if (!targetBoxId) {
       setScanError('Wybierz lub stwórz najpierw skrzynię, do której pakujesz.');
       return;
     }
@@ -918,11 +933,12 @@ export default function EventPackingPage() {
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId === id && c.locationId === activeBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId === id && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
-          existingEventConsumable: existingEC
+          existingEventConsumable: existingEC,
+          targetBoxId: targetBoxId
         });
         setQtyToPack('1');
         setScanInput('');
@@ -968,11 +984,12 @@ export default function EventPackingPage() {
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId === id && c.locationId === activeBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId === id && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
-          existingEventConsumable: existingEC
+          existingEventConsumable: existingEC,
+          targetBoxId: targetBoxId
         });
         setQtyToPack('1');
         setScanInput('');
@@ -988,7 +1005,13 @@ export default function EventPackingPage() {
 
   const handleConfirmConsumablePack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!packingModal || !activeBoxId) return;
+    if (!packingModal) return;
+
+    const targetBoxId = packingModal.targetBoxId || activeBoxId || parseInt(scanTargetBoxId);
+    if (!targetBoxId) {
+      showToast('Wybierz lub stwórz najpierw skrzynię, do której pakujesz.', 'error');
+      return;
+    }
 
     const count = parseInt(qtyToPack);
     if (isNaN(count) || count <= 0) {
@@ -1025,7 +1048,7 @@ export default function EventPackingPage() {
         name: consumable.name,
         quantityPacked: count,
         quantityRequired: count,
-        locationId: activeBoxId
+        locationId: targetBoxId
       };
       setConsumablesList(prev => [...prev, newEC]);
     }
@@ -1070,7 +1093,7 @@ export default function EventPackingPage() {
           .from('event_consumables')
           .insert({
             consumable_id: consumable.id,
-            location_id: activeBoxId,
+            location_id: targetBoxId,
             quantity_packed: count,
             quantity_required: count
           });
@@ -1094,11 +1117,85 @@ export default function EventPackingPage() {
     return box ? box.name : `Skrzynia #${boxId}`;
   };
 
+  const filteredItems = items.filter(item => {
+    if (activeBoxId !== null && item.location_id !== activeBoxId) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = item.name.toLowerCase().includes(q);
+      const matchesId = item.id.toString() === q || `i${item.id}` === q;
+      const matchesResp = (item.responsible_person || '').toLowerCase().includes(q);
+      return matchesName || matchesId || matchesResp;
+    }
+    return true;
+  });
+
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    let valA: any = '';
+    let valB: any = '';
+
+    if (sortKey === 'id') {
+      valA = a.id;
+      valB = b.id;
+    } else if (sortKey === 'responsible') {
+      valA = (a.responsible_person || '').toLowerCase();
+      valB = (b.responsible_person || '').toLowerCase();
+    } else if (sortKey === 'status') {
+      valA = a.status;
+      valB = b.status;
+    } else if (sortKey === 'box') {
+      valA = getBoxName(a.location_id).toLowerCase();
+      valB = getBoxName(b.location_id).toLowerCase();
+    } else {
+      valA = a.name.toLowerCase();
+      valB = b.name.toLowerCase();
+    }
+
+    if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const filteredConsumables = consumablesList.filter(cons => {
+    if (activeBoxId !== null && cons.locationId !== activeBoxId) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = cons.name.toLowerCase().includes(q);
+      const matchesId = cons.consumableId.toString() === q || `c${cons.consumableId}` === q;
+      return matchesName || matchesId;
+    }
+    return true;
+  });
+
+  const sortedConsumables = [...filteredConsumables].sort((a, b) => {
+    let valA: any = '';
+    let valB: any = '';
+
+    if (sortKey === 'id') {
+      valA = a.consumableId;
+      valB = b.consumableId;
+    } else if (sortKey === 'qty') {
+      valA = a.quantityPacked;
+      valB = b.quantityPacked;
+    } else if (sortKey === 'min_qty') {
+      valA = a.quantityRequired;
+      valB = b.quantityRequired;
+    } else if (sortKey === 'box') {
+      valA = getBoxName(a.locationId).toLowerCase();
+      valB = getBoxName(b.locationId).toLowerCase();
+    } else {
+      valA = a.name.toLowerCase();
+      valB = b.name.toLowerCase();
+    }
+
+    if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
-      {/* Back link & Title */}
       <div className="space-y-2">
-        <Link href="/zawody" className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-white transition-colors">
+        <Link href="/zawody" className="inline-flex items-center gap-1 text-sm text-zinc-455 hover:text-white transition-colors">
           <ArrowLeft className="h-4 w-4" /> Powrót do listy wyjazdów
         </Link>
         
@@ -1109,15 +1206,11 @@ export default function EventPackingPage() {
                 <Trophy className="h-7 w-7 text-blue-400 shrink-0" />
                 {event.name}
               </h1>
-              <div className="flex items-center gap-2 text-zinc-400 text-sm mt-1.5">
-                <Calendar className="h-4 w-4 text-zinc-550" />
-                <span>Wyjazd: <span className="font-semibold text-zinc-200">{event.start_date}</span></span>
-                <span className="text-zinc-650">•</span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                  event.is_active 
-                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
-                    : 'bg-zinc-800 text-zinc-500'
-                }`}>
+              <div className="flex items-center gap-2 text-zinc-500 text-xs mt-1.5 font-medium">
+                <Calendar className="h-3.5 w-3.5 text-zinc-600" />
+                <span>Wyjazd: <span className="text-zinc-350">{event.start_date}</span></span>
+                <span className="text-zinc-800">•</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20`}>
                   {event.is_active ? 'Przygotowania aktywne' : 'Wyjazd zakończony'}
                 </span>
               </div>
@@ -1126,14 +1219,14 @@ export default function EventPackingPage() {
             <button 
               onClick={fetchData} 
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-850 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-50 active:scale-95 duration-100"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Odśwież stan
             </button>
           </div>
         ) : (
-          <div className="h-20 bg-zinc-900 animate-pulse rounded-xl" />
+          <div className="h-20 bg-zinc-900/60 animate-pulse rounded-xl" />
         )}
       </div>
 
@@ -1144,426 +1237,574 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* Box Selection & Barcode Scanner Panel */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        
-        {/* Box Picker Card */}
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 space-y-6">
-          <div>
-            <h3 className="font-bold text-white text-md">1. Wybierz skrzynię pakowania</h3>
-            <p className="text-zinc-550 text-xs mt-0.5">Wskaż skrzynię wyjazdową, do której aktualnie wkładasz sprzęt</p>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        <div className="lg:col-span-1 space-y-4">
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-xs tracking-wider uppercase text-zinc-500">Skrzynie Wyjazdowe</h3>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-zinc-950 border border-zinc-850 text-zinc-400 rounded">
+                {boxes.length}
+              </span>
+            </div>
 
-          <div className="space-y-4">
-            {/* Dropdown Selector */}
-            {boxes.length === 0 ? (
-              <div className="p-3 text-center text-xs text-rose-400 bg-rose-500/5 border border-rose-500/20 rounded-lg">
-                Brak skrzyń przypisanych do tego wyjazdu. Stwórz skrzynię poniżej, aby rozpocząć pakowanie.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {boxes.map((box) => (
-                  <div key={box.id} className="flex gap-2 items-center">
-                    <button
-                      onClick={() => {
-                        setActiveBoxId(box.id);
-                        setScanSuccess(null);
-                        setScanError(null);
-                      }}
-                      className={`flex-1 flex items-center justify-between px-4 py-2.5 rounded-lg text-sm transition-all border ${
-                        activeBoxId === box.id
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/40 font-semibold'
-                          : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900/50'
-                      }`}
-                    >
-                      <span className="truncate">{box.name}</span>
-                      {activeBoxId === box.id && <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />}
-                    </button>
-                    
-                    <button
-                      onClick={() => openEditBoxModal(box)}
-                      className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
-                      title="Zarządzaj skrzynią"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Quick Box Creation */}
-            <form onSubmit={handleCreateBox} className="border-t border-zinc-800/80 pt-4 space-y-3">
-              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Dodaj nową skrzynię</h4>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  required
-                  placeholder="Nazwa (np. Skrzynia Chemia)"
-                  value={newBoxName}
-                  onChange={(e) => setNewBoxName(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Pokój / Ciężarówka"
-                    value={newBoxRoom}
-                    onChange={(e) => setNewBoxRoom(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Opiekun"
-                    value={newBoxResponsible}
-                    onChange={(e) => setNewBoxResponsible(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
+            <div className="space-y-1.5 max-h-[400px] overflow-y-auto pr-1">
+              <button
+                onClick={() => {
+                  setActiveBoxId(null);
+                  setScanSuccess(null);
+                  setScanError(null);
+                }}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
+                  activeBoxId === null
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/35 font-bold shadow-lg shadow-blue-500/[0.02]'
+                    : 'bg-zinc-950/60 text-zinc-400 border-zinc-850 hover:bg-zinc-900/40 hover:text-zinc-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span>Wszystkie skrzynie</span>
                 </div>
-                <button
-                  type="submit"
-                  disabled={creatingBox}
-                  className="w-full px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-black font-semibold text-xs rounded-lg transition-colors shrink-0 disabled:opacity-50 active:scale-95 duration-100"
-                >
-                  Stwórz skrzynię
-                </button>
-              </div>
-            </form>
+                {activeBoxId === null && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+              </button>
+
+              {boxes.length === 0 ? (
+                <div className="p-4 text-center text-xs text-zinc-500 border border-dashed border-zinc-850 rounded-xl">
+                  Brak skrzyń. Stwórz nową skrzynię poniżej.
+                </div>
+              ) : (
+                boxes.map((box) => {
+                  const boxItems = items.filter(i => i.location_id === box.id);
+                  const packedBoxItems = boxItems.filter(i => i.status === 'packed');
+                  const boxConsumables = consumablesList.filter(c => c.locationId === box.id);
+                  const packedBoxConsumables = boxConsumables.filter(c => c.quantityPacked >= c.quantityRequired);
+                  
+                  const totalItems = boxItems.length + boxConsumables.length;
+                  const packedItems = packedBoxItems.length + packedBoxConsumables.length;
+                  const isBoxActive = activeBoxId === box.id;
+
+                  return (
+                    <div key={box.id} className="flex gap-1.5 items-center">
+                      <button
+                        onClick={() => {
+                          setActiveBoxId(box.id);
+                          setScanSuccess(null);
+                          setScanError(null);
+                        }}
+                        className={`flex-1 flex flex-col items-start px-3.5 py-2.5 rounded-xl text-sm transition-all border text-left ${
+                          isBoxActive
+                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/35 font-bold shadow-lg shadow-blue-500/[0.02]'
+                            : 'bg-zinc-950/60 text-zinc-400 border-zinc-850 hover:bg-zinc-900/40 hover:text-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-bold truncate pr-2 text-sm">{box.name}</span>
+                          {isBoxActive && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                        </div>
+                        
+                        <div className="flex justify-between items-center w-full mt-1.5 text-xs text-zinc-500 font-medium">
+                          <span className="truncate max-w-[80px]">{box.room || 'Brak lokacji'}</span>
+                          <span>Spakowano: {packedItems}/{totalItems}</span>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => openEditBoxModal(box)}
+                        className="p-3 rounded-xl bg-zinc-950/40 border border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-750 transition-all active:scale-95 shrink-0"
+                        title="Zarządzaj skrzynią"
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="border-t border-zinc-850 pt-4">
+              <button
+                type="button"
+                onClick={() => setCreatingBox(prev => !prev)}
+                className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-zinc-400 hover:text-zinc-200 bg-zinc-950/30 border border-zinc-850 hover:border-zinc-800 rounded-lg transition-colors uppercase tracking-wider"
+              >
+                <span>{creatingBox ? 'Ukryj kreator' : 'Dodaj nową skrzynię'}</span>
+                <Plus className={`h-4 w-4 transition-transform ${creatingBox ? 'rotate-45 text-rose-450' : ''}`} />
+              </button>
+
+              {creatingBox && (
+                <form onSubmit={handleCreateBox} className="mt-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nazwa (np. Skrzynia Chemia)"
+                    value={newBoxName}
+                    onChange={(e) => setNewBoxName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 transition-colors"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Lokalizacja"
+                      value={newBoxRoom}
+                      onChange={(e) => setNewBoxRoom(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 transition-colors"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Opiekun"
+                      value={newBoxResponsible}
+                      onChange={(e) => setNewBoxResponsible(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 transition-colors"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-blue-500 hover:bg-blue-400 text-black font-bold text-xs rounded-lg active:scale-95 transition-all duration-100"
+                  >
+                    Stwórz skrzynię
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Barcode scanner mockup card */}
-        <div className="lg:col-span-2 bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <QrCode className="h-5 w-5" />
+        <div className="lg:col-span-3 space-y-6">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-zinc-900/20 border border-zinc-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Skrzynie Wyjazdowe</span>
+                <div className="text-xl font-extrabold text-white mt-0.5">{boxes.length}</div>
+              </div>
+              <div className="h-9 w-9 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                <LayoutDashboard className="h-5 w-5" />
+              </div>
             </div>
-            <div>
-              <h3 className="font-bold text-white text-md">2. Zeskanuj przedmiot (Skaner Kodów)</h3>
-              <p className="text-zinc-555 text-xs mt-0.5">
-                Symulator odczytu kodu. Wpisz ID wiertarki (102), cyny (202), frezów (201) lub innego zasobu.
-              </p>
+
+            <div className="bg-zinc-900/20 border border-zinc-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Sprzęt Trwały</span>
+                <div className="text-xl font-extrabold text-white mt-0.5">
+                  {items.filter(i => i.status === 'packed').length} / {items.length}
+                </div>
+              </div>
+              <div className="h-9 w-9 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                <Package className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/20 border border-zinc-800 p-4 rounded-xl flex items-center justify-between shadow-sm">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Materiały Zużywalne</span>
+                <div className="text-xl font-extrabold text-white mt-0.5">
+                  {consumablesList.filter(c => c.quantityPacked >= c.quantityRequired).length} / {consumablesList.length}
+                </div>
+              </div>
+              <div className="h-9 w-9 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center">
+                <Boxes className="h-5 w-5" />
+              </div>
             </div>
           </div>
 
-          <form onSubmit={handleScanCode} className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  required
-                  placeholder={activeBoxId ? "Wpisz ID kodu przedmiotu..." : "Najpierw wybierz/stwórz skrzynię"}
-                  disabled={!activeBoxId}
-                  value={scanInput}
-                  onChange={(e) => setScanInput(e.target.value)}
-                  className="w-full px-4 py-2.5 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500/50 disabled:opacity-30"
-                />
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <QrCode className="h-5 w-5 text-blue-400 animate-pulse" />
+                <div>
+                  <h4 className="font-bold text-zinc-200 text-sm">Szybkie skanowanie / pakowanie</h4>
+                  <p className="text-[11px] text-zinc-550">Wpisz ID kodu (np. I102, C202) aby spakować do skrzyni</p>
+                </div>
               </div>
+
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <span className="text-zinc-500">Docelowa skrzynia:</span>
+                {activeBoxId !== null ? (
+                  <span className="px-2.5 py-1 text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/25 rounded-lg">
+                    {getBoxName(activeBoxId)}
+                  </span>
+                ) : (
+                  <select
+                    value={scanTargetBoxId}
+                    onChange={(e) => setScanTargetBoxId(e.target.value)}
+                    disabled={boxes.length === 0}
+                    className="px-2 py-1 text-xs font-medium rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 focus:outline-none focus:border-blue-500/50"
+                  >
+                    {boxes.map(box => (
+                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleScanCode} className="flex gap-2">
+              <input
+                type="text"
+                required
+                placeholder={boxes.length > 0 ? "Wpisz kod przedmiotu (np. I102, C201)..." : "Stwórz najpierw skrzynię"}
+                disabled={boxes.length === 0}
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                className="flex-1 px-3.5 py-2.5 text-xs rounded-lg bg-zinc-950 border border-zinc-850 text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-blue-500/50 disabled:opacity-40"
+              />
               <button
                 type="submit"
-                disabled={!activeBoxId}
-                className="px-6 py-2.5 bg-blue-500 text-black hover:bg-blue-400 font-bold text-sm rounded-lg transition-colors shrink-0 disabled:opacity-30"
+                disabled={boxes.length === 0}
+                className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-black font-bold text-xs rounded-lg active:scale-95 transition-all duration-100 disabled:opacity-40"
               >
-                Zeskanuj / Pakuj
+                Zeskanuj
               </button>
-            </div>
-          </form>
+            </form>
 
-          {/* Scanner Feedback Messages */}
-          {scanError && (
-            <div className="p-3.5 rounded-lg border border-rose-500/25 bg-rose-500/5 text-rose-400 text-xs flex gap-2">
-              <AlertTriangle className="h-4.5 w-4.5 shrink-0 text-rose-500" />
-              <span>{scanError}</span>
-            </div>
-          )}
-
-          {scanSuccess && (
-            <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 text-blue-400 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
-              <div className="flex gap-2">
-                <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-blue-500" />
-                <span>{scanSuccess}</span>
+            {scanError && (
+              <div className="px-3.5 py-2.5 rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-450 text-xs flex gap-2 animate-in fade-in duration-200">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                <span>{scanError}</span>
               </div>
-              {scannedItem && (
+            )}
+
+            {scanSuccess && (
+              <div className="px-3.5 py-2.5 rounded-lg border border-blue-500/20 bg-blue-500/5 text-blue-400 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                <div className="flex gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500" />
+                  <span>{scanSuccess}</span>
+                </div>
+                {scannedItem && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openEditItemModal(scannedItem);
+                      setScanSuccess(null);
+                      setScannedItem(null);
+                    }}
+                    className="px-2.5 py-1 bg-blue-500 hover:bg-blue-400 text-black font-bold text-[10px] rounded transition-all active:scale-95"
+                  >
+                    Modyfikuj
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-850 pb-3 gap-3">
+              <div className="flex space-x-6">
+                <button
+                  onClick={() => { setActiveTab('items'); setScanSuccess(null); setScanError(null); }}
+                  className={`pb-3 text-sm font-semibold border-b-2 transition-all duration-200 flex items-center gap-2 ${
+                    activeTab === 'items'
+                      ? 'border-blue-500 text-blue-400 font-bold'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Package className="h-4 w-4" />
+                  Sprzęt Trwały ({filteredItems.length})
+                </button>
+                <button
+                  onClick={() => { setActiveTab('consumables'); setScanSuccess(null); setScanError(null); }}
+                  className={`pb-3 text-sm font-semibold border-b-2 transition-all duration-200 flex items-center gap-2 ${
+                    activeTab === 'consumables'
+                      ? 'border-blue-500 text-blue-400 font-bold'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Boxes className="h-4 w-4" />
+                  Materiały Zużywalne ({filteredConsumables.length})
+                </button>
+              </div>
+
+              {activeTab === 'items' ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAssignItemModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-indigo-400 hover:bg-indigo-350 rounded-lg active:scale-95 transition-all self-start sm:self-auto shadow-sm"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Przypisz z warsztatu
+                </button>
+              ) : (
                 <button
                   type="button"
                   onClick={() => {
-                    openEditItemModal(scannedItem);
-                    setScanSuccess(null);
-                    setScannedItem(null);
+                    setIsAddReqModalOpen(true);
+                    if (boxes.length > 0) {
+                      setReqBoxId(boxes[0].id.toString());
+                    }
+                    if (globalConsumables.length > 0) {
+                      setReqConsumableId(globalConsumables[0].id.toString());
+                    }
                   }}
-                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-black font-bold text-xs rounded-lg transition-colors shadow-sm whitespace-nowrap self-end sm:self-auto"
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-teal-400 hover:bg-teal-355 rounded-lg active:scale-95 transition-all self-start sm:self-auto shadow-sm"
                 >
-                  Otwórz Edycję Zasobu
+                  <Plus className="h-3.5 w-3.5" /> Dodaj zapotrzebowanie
                 </button>
               )}
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Main Checklist / Panic Board Grid */}
-      <div className="grid lg:grid-cols-2 gap-8">
-        
-        {/* Durable Items Checklist (Left Column) */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Package className="h-5 w-5 text-indigo-400" />
-              Lista Paniki: Sprzęt Trwały
-            </h2>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsAssignItemModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-black bg-indigo-400 hover:bg-indigo-300 rounded-lg transition-colors shrink-0"
-              >
-                <Plus className="h-3.5 w-3.5" /> Przypisz z warsztatu
-              </button>
-              <span className="text-xs text-zinc-550 shrink-0">
-                Spakowano: {items.filter(i => i.status === 'packed').length} / {items.length}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-zinc-900/20 border border-zinc-850 rounded-xl overflow-hidden divide-y divide-zinc-850">
-            {loading ? (
-              <div className="p-4 space-y-3">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="flex flex-col md:flex-row md:items-center justify-between p-4 border border-zinc-850/50 rounded-xl bg-zinc-900/10 animate-pulse gap-4">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-4 w-12 bg-zinc-800 rounded" />
-                        <div className="h-4 w-32 bg-zinc-800 rounded" />
-                      </div>
-                      <div className="h-3 w-40 bg-zinc-850 rounded" />
-                    </div>
-                    <div className="h-8 w-24 bg-zinc-800 rounded-lg" />
-                  </div>
-                ))}
-              </div>
-            ) : items.length === 0 ? (
-              <div className="p-12 text-center text-zinc-500 text-sm space-y-2">
-                <Package className="h-10 w-10 text-zinc-700 mx-auto" />
-                <p className="font-semibold text-zinc-400">Brak narzędzi dla tego wyjazdu</p>
-                <p className="text-xs max-w-xs mx-auto">
-                  Zeskanuj ID dowolnego narzędzia trwałego (np. 101, 102) lub kliknij przycisk przypisywania powyżej, aby dodać je do wyjazdu.
-                </p>
-              </div>
-            ) : (
-              items.map((item) => {
-                const isPacked = item.status === 'packed';
-                const isHighlighted = recentlyUpdatedId === `item-${item.id}`;
-                return (
-                  <div 
-                    key={item.id}
-                    className={`flex flex-col md:flex-row md:items-center justify-between p-4 gap-4 transition-all duration-700 ease-out border border-transparent ${
-                      isHighlighted 
-                        ? 'bg-blue-500/25 border-blue-500/40 shadow-lg shadow-blue-500/5 scale-[1.005] duration-75' 
-                        : isPacked 
-                          ? 'bg-blue-500/[0.015] border-zinc-850 hover:bg-blue-500/[0.03]' 
-                          : 'bg-rose-500/[0.01] border-zinc-850 hover:bg-rose-500/[0.02]'
-                    }`}
+            <div className="flex flex-col sm:flex-row gap-3 pt-1">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder={activeTab === 'items' ? "Szukaj narzędzi po nazwie, ID, opiekunie..." : "Szukaj materiałów po nazwie, ID..."}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 transition-colors"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-2 text-zinc-500 hover:text-zinc-300"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-zinc-550">#{item.id}</span>
-                        <h4 className="font-bold text-zinc-100">{item.name}</h4>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-zinc-500 mt-1">
-                        <span>Opiekun: {item.responsible_person || 'brak'}</span>
-                        <span className="text-zinc-700">•</span>
-                        <span>Skrzynia: {getBoxName(item.location_id)}</span>
-                      </div>
-                    </div>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
 
-                    <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-                      {isPacked ? (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/25 shrink-0">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
-                          Spakowany
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/25 animate-pulse shrink-0">
-                          <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
-                          Brakujący
-                        </span>
-                      )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 font-medium whitespace-nowrap">Sortowanie:</span>
+                <select
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value as any)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 focus:outline-none focus:border-blue-500/50 transition-colors"
+                >
+                  <option value="name" className="bg-zinc-950 text-zinc-200">Nazwa</option>
+                  <option value="id" className="bg-zinc-950 text-zinc-200">ID</option>
+                  {activeTab === 'items' ? (
+                    <>
+                      <option value="responsible" className="bg-zinc-950 text-zinc-200">Opiekun</option>
+                      <option value="status" className="bg-zinc-950 text-zinc-200">Status</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="qty" className="bg-zinc-950 text-zinc-200">Spakowane</option>
+                      <option value="min_qty" className="bg-zinc-950 text-zinc-200">Wymagane</option>
+                    </>
+                  )}
+                  <option value="box" className="bg-zinc-950 text-zinc-200">Skrzynia</option>
+                </select>
 
-                      <div className="flex items-center gap-1 border-l border-zinc-800/85 pl-2 ml-1">
-                        {isPacked ? (
-                          <button
-                            type="button"
-                            onClick={() => handleUnpackItem(item.id)}
-                            className="px-2.5 py-1 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 rounded-lg active:scale-90 transition-transform duration-100 shrink-0"
-                          >
-                            Rozpakuj
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handlePackItem(item.id)}
-                            className="px-2.5 py-1 text-[11px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-lg active:scale-90 transition-transform duration-100 shrink-0"
-                          >
-                            Spakuj
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleReturnToWorkshop(item.id)}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 rounded-lg active:scale-90 transition-transform duration-100 shrink-0"
-                          title="Zwróć do szafy warsztatowej"
-                        >
-                          Cofnij do szafy
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => openEditItemModal(item)}
-                          className="p-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 active:scale-90 transition-transform duration-100 shrink-0"
-                          title="Edytuj szczegóły"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Consumables Progress (Right Column) */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Boxes className="h-5 w-5 text-teal-400" />
-              Progress Wyjazdowy: Materiały Zużywalne
-            </h2>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddReqModalOpen(true);
-                  if (boxes.length > 0) {
-                    setReqBoxId(boxes[0].id.toString());
-                  }
-                  if (globalConsumables.length > 0) {
-                    setReqConsumableId(globalConsumables[0].id.toString());
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-black bg-teal-400 hover:bg-teal-300 rounded-lg transition-colors shrink-0"
-              >
-                <Plus className="h-3.5 w-3.5" /> Dodaj zapotrzebowanie
-              </button>
-              <span className="text-xs text-zinc-550 shrink-0">
-                Pozycje skompletowane: {consumablesList.filter(c => c.quantityPacked >= c.quantityRequired).length} / {consumablesList.length}
-              </span>
+                <button
+                  type="button"
+                  onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="p-2 bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg active:scale-95 transition-all"
+                  title="Zmień kierunek sortowania"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="bg-zinc-900/20 border border-zinc-850 rounded-xl overflow-hidden p-6 space-y-6">
-            {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="space-y-3 bg-zinc-900/10 p-4 border border-zinc-850/50 rounded-xl animate-pulse">
-                    <div className="flex items-center justify-between">
-                      <div className="h-4 w-1/3 bg-zinc-800 rounded" />
-                      <div className="h-8 w-24 bg-zinc-800 rounded-lg" />
-                    </div>
-                    <div className="h-2 w-full bg-zinc-950 rounded-full" />
-                  </div>
-                ))}
-              </div>
-            ) : consumablesList.length === 0 ? (
-              <div className="p-8 text-center text-zinc-500 text-sm space-y-2">
-                <Boxes className="h-10 w-10 text-zinc-700 mx-auto" />
-                <p className="font-semibold text-zinc-400">Brak zapotrzebowania na materiały</p>
-                <p className="text-xs">Zeskanuj ID materiału (np. 201) lub kliknij przycisk powyżej, aby dodać zapotrzebowanie.</p>
-              </div>
-            ) : (
-              consumablesList.map((cons) => {
-                const percent = Math.min(100, Math.round((cons.quantityPacked / cons.quantityRequired) * 100));
-                const isComplete = percent >= 100;
-                const isHighlighted = recentlyUpdatedId === `cons-${cons.eventConsumableId}`;
-
-                return (
-                  <div 
-                    key={cons.eventConsumableId} 
-                    className={`space-y-2 p-4 border transition-all duration-700 ease-out ${
-                      isHighlighted 
-                        ? 'bg-blue-500/25 border-blue-500/40 shadow-lg shadow-blue-500/5 scale-[1.005] duration-75' 
-                        : isComplete 
-                          ? 'bg-zinc-900/40 border-zinc-850/60 hover:bg-zinc-900/60' 
-                          : 'bg-zinc-900/20 border-zinc-850/30 hover:bg-zinc-900/30'
-                    } rounded-xl`}
-                  >
-                    <div className="flex items-center justify-between text-sm">
-                      <div>
-                        <span className="font-bold text-zinc-200">{cons.name}</span>
-                        <span className="text-xs text-zinc-550 ml-2 font-mono">({getBoxName(cons.locationId)})</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-850 px-2 py-0.5 rounded-lg">
-                          <button
-                            type="button"
-                            onClick={() => handleAdjustConsumable(cons.eventConsumableId, cons.consumableId, -1)}
-                            className="p-1 text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 rounded active:scale-75 transition-transform duration-100"
-                            title="Rozpakuj 1 szt."
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          
-                          <span className={`font-mono text-xs font-bold min-w-[65px] text-center ${isComplete ? 'text-blue-400' : 'text-zinc-450'}`}>
-                            {cons.quantityPacked} / {cons.quantityRequired}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => handleAdjustConsumable(cons.eventConsumableId, cons.consumableId, 1)}
-                            className="p-1 text-zinc-400 hover:text-blue-400 hover:bg-zinc-900 rounded active:scale-75 transition-transform duration-100"
-                            title="Spakuj 1 szt."
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
+            <div className="bg-zinc-950/40 border border-zinc-850/60 rounded-xl overflow-hidden divide-y divide-zinc-850 shadow-inner">
+              {activeTab === 'items' ? (
+                loading ? (
+                  <div className="p-5 space-y-4">
+                    {[1, 2, 3].map(n => (
+                      <div key={n} className="flex justify-between items-center bg-zinc-900/10 p-3.5 border border-zinc-850 animate-pulse rounded-xl">
+                        <div className="space-y-2 flex-1">
+                          <div className="h-4 w-1/3 bg-zinc-800 rounded" />
+                          <div className="h-3 w-1/4 bg-zinc-850 rounded" />
                         </div>
-                        
-                        <button
-                          type="button"
-                          onClick={() => openEditReqModal(cons)}
-                          className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 hover:text-white border border-zinc-700 text-zinc-450 active:scale-90 transition-transform duration-100"
-                          title="Koryguj zapotrzebowanie"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="h-8 w-24 bg-zinc-800 rounded-lg" />
                       </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="h-3 w-full bg-zinc-950 border border-zinc-850 rounded-full overflow-hidden p-0.5">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          isComplete 
-                            ? 'bg-gradient-to-r from-blue-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]' 
-                            : 'bg-gradient-to-r from-amber-500 to-yellow-400'
-                        }`}
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
+                    ))}
                   </div>
-                );
-              })
-            )}
+                ) : sortedItems.length === 0 ? (
+                  <div className="p-12 text-center text-zinc-550 text-xs space-y-2.5">
+                    <Package className="h-10 w-10 text-zinc-700 mx-auto" />
+                    <div className="font-semibold text-zinc-450">Brak dopasowanych narzędzi</div>
+                    <p className="max-w-xs mx-auto text-zinc-550">
+                      Spróbuj zmienić filtry lub przypisz nowe narzędzia z warsztatu za pomocą przycisku "+ Przypisz z warsztatu" u góry.
+                    </p>
+                  </div>
+                ) : (
+                  sortedItems.map((item) => {
+                    const isPacked = item.status === 'packed';
+                    const isHighlighted = recentlyUpdatedId === `item-${item.id}`;
+                    
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 transition-all duration-300 border border-transparent ${
+                          isHighlighted
+                            ? 'bg-blue-500/20 border-blue-500/30 shadow-md duration-75 scale-[1.002]'
+                            : isPacked
+                              ? 'bg-blue-500/[0.01] hover:bg-blue-500/[0.02]'
+                              : 'bg-rose-500/[0.01] hover:bg-rose-500/[0.02]'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[9px] font-bold text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-850">
+                              #{item.id}
+                            </span>
+                            <span className="font-bold text-zinc-200 text-sm">{item.name}</span>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-1.5 text-[11px] text-zinc-500 font-medium">
+                            <span className="flex items-center gap-1">
+                              Opiekun: <span className="text-zinc-455">{item.responsible_person || 'brak'}</span>
+                            </span>
+                            <span className="text-zinc-800">•</span>
+                            <span className="flex items-center gap-1">
+                              Skrzynia: <span className="text-zinc-455">{getBoxName(item.location_id)}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3.5 mt-2 sm:mt-0 pt-2.5 sm:pt-0 border-t border-zinc-900/60 sm:border-t-0">
+                          {isPacked ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                              <CheckCircle2 className="h-3 w-3 text-blue-500" />
+                              Spakowany
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse shrink-0">
+                              <AlertTriangle className="h-3 w-3 text-rose-500" />
+                              Brakujący
+                            </span>
+                          )}
+
+                          <div className="flex items-center gap-1.5 border-l border-zinc-900 pl-3">
+                            {isPacked ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUnpackItem(item.id)}
+                                className="px-2.5 py-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 rounded-md active:scale-95 transition-all shrink-0"
+                              >
+                                Rozpakuj
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handlePackItem(item.id)}
+                                className="px-2.5 py-1 text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-md active:scale-95 transition-all shrink-0"
+                              >
+                                Spakuj
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleReturnToWorkshop(item.id)}
+                              className="px-2.5 py-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 rounded-md active:scale-95 transition-all shrink-0"
+                              title="Zwróć sprzęt do warsztatu"
+                            >
+                              Wycofaj
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openEditItemModal(item)}
+                              className="p-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 active:scale-95 transition-all"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )
+              ) : (
+                loading ? (
+                  <div className="p-5 space-y-4">
+                    {[1, 2, 3].map(n => (
+                      <div key={n} className="space-y-2 bg-zinc-900/10 p-3.5 border border-zinc-850 animate-pulse rounded-xl">
+                        <div className="h-4 w-1/3 bg-zinc-800 rounded" />
+                        <div className="h-2.5 w-full bg-zinc-950 rounded-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : sortedConsumables.length === 0 ? (
+                  <div className="p-12 text-center text-zinc-550 text-xs space-y-2.5">
+                    <Boxes className="h-10 w-10 text-zinc-700 mx-auto" />
+                    <div className="font-semibold text-zinc-450">Brak zapotrzebowań materiałowych</div>
+                    <p className="max-w-xs mx-auto text-zinc-550">
+                      Dodaj zapotrzebowanie za pomocą przycisku "+ Dodaj zapotrzebowanie" u góry.
+                    </p>
+                  </div>
+                ) : (
+                  sortedConsumables.map((cons) => {
+                    const percent = Math.min(100, Math.round((cons.quantityPacked / cons.quantityRequired) * 100));
+                    const isComplete = percent >= 100;
+                    const isHighlighted = recentlyUpdatedId === `cons-${cons.eventConsumableId}`;
+
+                    return (
+                      <div
+                        key={cons.eventConsumableId}
+                        className={`p-4 space-y-2.5 transition-all duration-300 border border-transparent ${
+                          isHighlighted
+                            ? 'bg-blue-500/20 border-blue-500/30 shadow-md duration-75 scale-[1.002]'
+                            : isComplete
+                              ? 'bg-blue-500/[0.005] hover:bg-blue-500/[0.015]'
+                              : 'bg-zinc-900/10 hover:bg-zinc-900/20'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <span className="font-bold text-zinc-100 text-base">{cons.name}</span>
+                            <span className="text-xs text-zinc-400 font-mono ml-2.5 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded">
+                              Skrzynia: {getBoxName(cons.locationId)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 self-end sm:self-auto">
+                            <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded-lg">
+                              <button
+                                type="button"
+                                onClick={() => handleAdjustConsumable(cons.eventConsumableId, cons.consumableId, -1)}
+                                className="p-1 text-zinc-400 hover:text-rose-500 hover:bg-zinc-900 rounded active:scale-75 transition-transform"
+                                title="Odejmij 1 szt."
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+
+                              <span className={`font-mono text-sm font-bold min-w-[70px] text-center ${isComplete ? 'text-blue-400' : 'text-zinc-400'}`}>
+                                {cons.quantityPacked} / {cons.quantityRequired}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleAdjustConsumable(cons.eventConsumableId, cons.consumableId, 1)}
+                                className="p-1 text-zinc-400 hover:text-blue-400 hover:bg-zinc-900 rounded active:scale-75 transition-transform"
+                                title="Dodaj 1 szt."
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => openEditReqModal(cons)}
+                              className="p-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 active:scale-95 transition-transform"
+                              title="Koryguj zapotrzebowanie"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="relative">
+                          <div className="h-2 w-full bg-zinc-950 border border-zinc-850/65 rounded-full overflow-hidden p-0.5">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isComplete
+                                  ? 'bg-gradient-to-r from-blue-500 to-teal-400 shadow-[0_0_8px_rgba(59,130,246,0.35)]'
+                                  : 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                              }`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )
+              )}
+            </div>
           </div>
         </div>
-
       </div>
 
-      {/* --- MODALS SECTION --- */}
-
-      {/* 1. Modal: Package Consumable Popup (Scanner helper) */}
       {packingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -1573,7 +1814,7 @@ export default function EventPackingPage() {
                 Pakowanie materiału do skrzyni
               </h3>
               <p className="text-xs text-zinc-400 mt-1">
-                Wkładasz materiał eksploatacyjny do skrzyni: <span className="font-semibold text-blue-400">{getBoxName(activeBoxId!)}</span>
+                Wkładasz materiał eksploatacyjny do skrzyni: <span className="font-semibold text-blue-400">{getBoxName(packingModal.targetBoxId || activeBoxId || parseInt(scanTargetBoxId))}</span>
               </p>
             </div>
 
@@ -1636,7 +1877,6 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* 2. Modal: Edit Box Name / Delete Box */}
       {isBoxEditModalOpen && editingBox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -1693,13 +1933,12 @@ export default function EventPackingPage() {
                 />
               </div>
 
-              {/* Action buttons */}
               <div className="flex justify-between items-center pt-4 border-t border-zinc-800/80 mt-4">
                 <button
                   type="button"
                   onClick={() => handleDeleteBox(editingBox.id)}
                   disabled={modalLoading}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-rose-500/10 text-rose-400 border border-rose-500/25 hover:bg-rose-500/20 transition-all font-semibold"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-rose-500/10 text-rose-455 border border-rose-500/25 hover:bg-rose-500/20 transition-all font-semibold"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Usuń skrzynię
@@ -1727,7 +1966,6 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* 3. Modal: Edit/Delete Event Consumables Requirement */}
       {isReqEditModalOpen && editingReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -1751,7 +1989,6 @@ export default function EventPackingPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Qty Required */}
                 <div>
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                     Wymagane na wyjazd
@@ -1766,7 +2003,6 @@ export default function EventPackingPage() {
                   />
                 </div>
 
-                {/* Qty Packed */}
                 <div>
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                     Aktualnie spakowane
@@ -1782,7 +2018,6 @@ export default function EventPackingPage() {
                 </div>
               </div>
 
-              {/* Target Box Select */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Spakowane do skrzyni
@@ -1793,12 +2028,11 @@ export default function EventPackingPage() {
                   className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                 >
                   {boxes.map(box => (
-                    <option key={box.id} value={box.id}>{box.name}</option>
+                    <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Action buttons */}
               <div className="flex justify-between items-center pt-4 border-t border-zinc-800/80 mt-4">
                 <button
                   type="button"
@@ -1832,7 +2066,6 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* 4. Modal: Przypisz Sprzęt z Warsztatu */}
       {isAssignItemModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -1844,7 +2077,7 @@ export default function EventPackingPage() {
               <button 
                 type="button"
                 onClick={() => setIsAssignItemModalOpen(false)}
-                className="text-zinc-450 hover:text-white transition-colors"
+                className="text-zinc-400 hover:text-white transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1863,13 +2096,12 @@ export default function EventPackingPage() {
               }} 
               className="p-6 space-y-4"
             >
-              {/* Item selection */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Wybierz narzędzie z warsztatu
                 </label>
                 {workshopItems.length === 0 ? (
-                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-550 border border-zinc-850">
+                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
                     Brak wolnych narzędzi w warsztacie. Wszystkie są przypisane do wydarzeń!
                   </div>
                 ) : (
@@ -1879,9 +2111,9 @@ export default function EventPackingPage() {
                     required
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                   >
-                    <option value="">-- Wybierz narzędzie --</option>
+                    <option value="" className="bg-zinc-950 text-zinc-200">-- Wybierz narzędzie --</option>
                     {workshopItems.map(item => (
-                      <option key={item.id} value={item.id}>
+                      <option key={item.id} value={item.id} className="bg-zinc-950 text-zinc-200">
                         {item.name} (ID: #{item.id})
                       </option>
                     ))}
@@ -1889,13 +2121,12 @@ export default function EventPackingPage() {
                 )}
               </div>
 
-              {/* Target box selection */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Docelowa skrzynia wyjazdowa
                 </label>
                 {boxes.length === 0 ? (
-                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-550 border border-zinc-850">
+                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
                     Brak skrzyń dla tego wyjazdu. Najpierw utwórz skrzynię!
                   </div>
                 ) : (
@@ -1905,15 +2136,14 @@ export default function EventPackingPage() {
                     required
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                   >
-                    <option value="">-- Wybierz skrzynię --</option>
+                    <option value="" className="bg-zinc-950 text-zinc-200">-- Wybierz skrzynię --</option>
                     {boxes.map(box => (
-                      <option key={box.id} value={box.id}>{box.name}</option>
+                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
                     ))}
                   </select>
                 )}
               </div>
 
-              {/* Action buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
                 <button
                   type="button"
@@ -1935,7 +2165,6 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* 5. Modal: Dodaj Zapotrzebowanie */}
       {isAddReqModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -1947,20 +2176,19 @@ export default function EventPackingPage() {
               <button 
                 type="button"
                 onClick={() => setIsAddReqModalOpen(false)}
-                className="text-zinc-450 hover:text-white transition-colors"
+                className="text-zinc-400 hover:text-white transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleAddRequirement} className="p-6 space-y-4">
-              {/* Consumable select */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Wybierz materiał z magazynu
                 </label>
                 {globalConsumables.length === 0 ? (
-                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-550 border border-zinc-850">
+                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
                     Brak zdefiniowanych materiałów w magazynie.
                   </div>
                 ) : (
@@ -1970,9 +2198,9 @@ export default function EventPackingPage() {
                     required
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                   >
-                    <option value="">-- Wybierz materiał --</option>
+                    <option value="" className="bg-zinc-950 text-zinc-200">-- Wybierz materiał --</option>
                     {globalConsumables.map(cons => (
-                      <option key={cons.id} value={cons.id}>
+                      <option key={cons.id} value={cons.id} className="bg-zinc-950 text-zinc-200">
                         {cons.name} (Stan: {cons.quantity_stored} szt.)
                       </option>
                     ))}
@@ -1980,13 +2208,12 @@ export default function EventPackingPage() {
                 )}
               </div>
 
-              {/* Target box select */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Skrzynia docelowa
                 </label>
                 {boxes.length === 0 ? (
-                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-550 border border-zinc-850">
+                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
                     Brak skrzyń dla tego wyjazdu. Najpierw utwórz skrzynię!
                   </div>
                 ) : (
@@ -1996,15 +2223,14 @@ export default function EventPackingPage() {
                     required
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                   >
-                    <option value="">-- Wybierz skrzynię --</option>
+                    <option value="" className="bg-zinc-950 text-zinc-200">-- Wybierz skrzynię --</option>
                     {boxes.map(box => (
-                      <option key={box.id} value={box.id}>{box.name}</option>
+                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
                     ))}
                   </select>
                 )}
               </div>
 
-              {/* Qty Required */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Wymagana ilość (szt.)
@@ -2019,7 +2245,6 @@ export default function EventPackingPage() {
                 />
               </div>
 
-              {/* Responsible Person */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Opiekun zapotrzebowania (opcjonalnie)
@@ -2028,12 +2253,11 @@ export default function EventPackingPage() {
                   type="text"
                   placeholder="Domyślnie właściciel wybranej skrzyni"
                   value={reqResponsible}
-                  onChange={(e) => setReqResponsible(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-blue-500"
+                  onChange={(e) => setEditItemResponsible(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
-              {/* Action buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
                 <button
                   type="button"
@@ -2045,7 +2269,7 @@ export default function EventPackingPage() {
                 <button
                   type="submit"
                   disabled={globalConsumables.length === 0 || boxes.length === 0}
-                  className="px-5 py-2 rounded-lg text-sm bg-teal-400 text-black font-bold hover:bg-teal-350 transition-colors disabled:opacity-30"
+                  className="px-5 py-2 rounded-lg text-sm bg-teal-400 text-black font-bold hover:bg-teal-300 transition-colors disabled:opacity-30"
                 >
                   Dodaj zapotrzebowanie
                 </button>
@@ -2055,7 +2279,6 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* 6. Modal: Edytuj Szczegóły Sprzętu Trwałego */}
       {isItemEditModalOpen && editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -2070,20 +2293,19 @@ export default function EventPackingPage() {
                   setIsItemEditModalOpen(false);
                   setEditingItem(null);
                 }}
-                className="text-zinc-450 hover:text-white transition-colors"
+                className="text-zinc-400 hover:text-white transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleEditItemSubmit} className="p-6 space-y-4">
-              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-850">
-                <div className="text-xs text-zinc-555">Nazwa przedmiotu:</div>
+              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                <div className="text-xs text-zinc-500">Nazwa przedmiotu:</div>
                 <div className="font-bold text-white text-base mt-0.5">{editingItem.name}</div>
-                <div className="text-[11px] text-zinc-555 font-mono mt-1">ID zasobu: #{editingItem.id}</div>
+                <div className="text-[11px] text-zinc-500 font-mono mt-1">ID zasobu: #{editingItem.id}</div>
               </div>
 
-              {/* Status Select */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Status zasobu
@@ -2102,13 +2324,12 @@ export default function EventPackingPage() {
                   }}
                   className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                 >
-                  <option value="in_workshop">W warsztacie (Niewyjeżdżający)</option>
-                  <option value="assigned_to_event">Przypisany na wyjazd (Brakujący)</option>
-                  <option value="packed">Spakowany do skrzyni</option>
+                  <option value="in_workshop" className="bg-zinc-950 text-zinc-200">W warsztacie (Niewyjeżdżający)</option>
+                  <option value="assigned_to_event" className="bg-zinc-950 text-zinc-200">Przypisany na wyjazd (Brakujący)</option>
+                  <option value="packed" className="bg-zinc-950 text-zinc-200">Spakowany do skrzyni</option>
                 </select>
               </div>
 
-              {/* Location Select (conditional depending on status) */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   {editItemStatus === 'in_workshop' ? 'Lokalizacja w warsztacie (Szafa)' : 'Skrzynia docelowa na wyjeździe'}
@@ -2120,7 +2341,7 @@ export default function EventPackingPage() {
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                   >
                     {permanentLocations.map(loc => (
-                      <option key={loc.id} value={loc.id}>
+                      <option key={loc.id} value={loc.id} className="bg-zinc-950 text-zinc-200">
                         {loc.name} {loc.room ? `(${loc.room})` : ''}
                       </option>
                     ))}
@@ -2138,13 +2359,12 @@ export default function EventPackingPage() {
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
                   >
                     {boxes.map(box => (
-                      <option key={box.id} value={box.id}>{box.name}</option>
+                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
                     ))}
                   </select>
                 )}
               </div>
 
-              {/* Responsible Person */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Opiekun sprzętu
@@ -2158,7 +2378,6 @@ export default function EventPackingPage() {
                 />
               </div>
 
-              {/* Action buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
                 <button
                   type="button"
@@ -2183,17 +2402,16 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {/* Toast Notification for Web Haptics */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-300 ${
           toast.type === 'success' 
             ? 'bg-zinc-950 border-blue-500/35 text-blue-400' 
-            : 'bg-zinc-950 border-rose-500/35 text-rose-400'
+            : 'bg-zinc-950 border-rose-500/35 text-rose-455'
         }`}>
           {toast.type === 'success' ? (
             <CheckCircle2 className="h-4 w-4 text-blue-400" />
           ) : (
-            <AlertTriangle className="h-4 w-4 text-rose-400" />
+            <AlertTriangle className="h-4 w-4 text-rose-550" />
           )}
           <span className="text-sm font-semibold">{toast.message}</span>
         </div>
