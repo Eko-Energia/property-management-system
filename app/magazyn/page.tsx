@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { supabase, DatabaseItem, DatabaseConsumable, DatabaseLocation } from '@/utils/supabase/client';
+import { supabase, DatabaseItem, DatabaseConsumable, DatabaseLocation, DatabaseCategory } from '@/utils/supabase/client';
 import SearchableSelect from '@/app/components/SearchableSelect';
 import { 
   Package, 
@@ -20,7 +20,8 @@ import {
   Trash2,
   X,
   Settings,
-  ArrowUpDown
+  ArrowUpDown,
+  Tag
 } from 'lucide-react';
 
 export default function MagazynPage() {
@@ -28,8 +29,10 @@ export default function MagazynPage() {
   const [items, setItems] = useState<DatabaseItem[]>([]);
   const [consumables, setConsumables] = useState<DatabaseConsumable[]>([]);
   const [locations, setLocations] = useState<DatabaseLocation[]>([]);
+  const [categories, setCategories] = useState<DatabaseCategory[]>([]);
   
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   const [loading, setLoading] = useState<boolean>(true);
@@ -83,25 +86,37 @@ export default function MagazynPage() {
   const [newLocName, setNewLocName] = useState<string>('');
   const [newLocRoom, setNewLocRoom] = useState<string>('');
   const [newLocResponsible, setNewLocResponsible] = useState<string>('');
+  const [locSearchQuery, setLocSearchQuery] = useState<string>('');
+
+  // 1.5. Categories modal
+  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState<boolean>(false);
+  const [editingCategory, setEditingCategory] = useState<DatabaseCategory | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState<string>('');
+  const [newCategoryCode, setNewCategoryCode] = useState<string>('');
+  const [catSearchQuery, setCatSearchQuery] = useState<string>('');
 
   // 2. Item modal
   const [isItemModalOpen, setIsItemModalOpen] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<DatabaseItem | null>(null); // null = add
+  const [itemIdInput, setItemIdInput] = useState<string>('');
   const [itemName, setItemName] = useState<string>('');
   const [itemResponsible, setItemResponsible] = useState<string>('');
   const [itemLink, setItemLink] = useState<string>('');
   const [itemLocId, setItemLocId] = useState<string>('');
   const [itemStatus, setItemStatus] = useState<'in_workshop' | 'assigned_to_event' | 'packed'>('in_workshop');
+  const [itemCategoryId, setItemCategoryId] = useState<string>('');
 
   // 3. Consumable modal
   const [isConsumableModalOpen, setIsConsumableModalOpen] = useState<boolean>(false);
   const [editingConsumable, setEditingConsumable] = useState<DatabaseConsumable | null>(null); // null = add
+  const [consIdInput, setConsIdInput] = useState<string>('');
   const [consName, setConsName] = useState<string>('');
   const [consQty, setConsQty] = useState<number>(0);
   const [consMinQty, setConsMinQty] = useState<number>(0);
   const [consLink, setConsLink] = useState<string>('');
   const [consLocId, setConsLocId] = useState<string>('');
   const [consResponsible, setConsResponsible] = useState<string>('');
+  const [consCategoryId, setConsCategoryId] = useState<string>('');
 
   // Fallback Mock Data
   const mockLocations: DatabaseLocation[] = [
@@ -110,37 +125,46 @@ export default function MagazynPage() {
     { id: 3, name: 'Szuflada Narzędziowa C', type: 'permanent', event_id: null, room: 'Warsztat Główny', responsible_person: 'Adam Kowalski' },
   ];
 
+  const mockCategories: DatabaseCategory[] = [
+    { id: 1, name: 'Elektronika', code: 'EL' },
+    { id: 2, name: 'Narzędzia ręczne', code: 'NR' },
+    { id: 3, name: 'Materiały montażowe', code: 'MM' },
+    { id: 4, name: 'Pneumatyka', code: 'PN' }
+  ];
+
   const mockItems: DatabaseItem[] = [
-    { id: 101, name: 'Dremel 4000', location_id: 1, responsible_person: 'Bernie', shop_link: 'https://dremel.pl', status: 'in_workshop' },
-    { id: 102, name: 'Wkrętarka Makita 18V', location_id: 2, responsible_person: 'Jan Nowak', shop_link: 'https://makita.pl', status: 'assigned_to_event' },
-    { id: 103, name: 'Lutownica TS101', location_id: 2, responsible_person: 'Kamil', shop_link: 'https://gotronik.pl', status: 'packed' },
-    { id: 104, name: 'Zestaw kluczy płaskich', location_id: 3, responsible_person: 'Adam Kowalski', shop_link: 'https://sklep.pl', status: 'in_workshop' },
+    { id: 'I-NR-0001', name: 'Dremel 4000', location_id: 1, responsible_person: 'Bernie', shop_link: 'https://dremel.pl', status: 'in_workshop', category_id: 2 },
+    { id: 'I-NR-0002', name: 'Wkrętarka Makita 18V', location_id: 2, responsible_person: 'Jan Nowak', shop_link: 'https://makita.pl', status: 'assigned_to_event', category_id: 2 },
+    { id: 'I-EL-0001', name: 'Lutownica TS101', location_id: 2, responsible_person: 'Kamil', shop_link: 'https://gotronik.pl', status: 'packed', category_id: 1 },
+    { id: 'I-NR-0003', name: 'Zestaw kluczy płaskich', location_id: 3, responsible_person: 'Adam Kowalski', shop_link: 'https://sklep.pl', status: 'in_workshop', category_id: 2 },
   ];
 
   const mockConsumables: DatabaseConsumable[] = [
-    { id: 201, name: 'Frezy węglikowe 2mm', quantity_stored: 3, min_quantity: 10, shop_link: 'https://allegro.pl', location_id: 1, responsible_person: 'Bernie' },
-    { id: 202, name: 'Cyna bezołowiowa Sn99', quantity_stored: 8, min_quantity: 5, shop_link: 'https://tme.eu', location_id: 2, responsible_person: 'Kamil' },
-    { id: 203, name: 'Śruby M3x10 imbusowe (szt)', quantity_stored: 120, min_quantity: 200, shop_link: 'https://sruby.pl', location_id: 1, responsible_person: 'Bernie' },
-    { id: 204, name: 'Opaski zaciskowe czarne (szt)', quantity_stored: 45, min_quantity: 100, shop_link: 'https://tme.eu', location_id: 3, responsible_person: 'Adam Kowalski' },
+    { id: 'C-MM-0001', name: 'Frezy węglikowe 2mm', quantity_stored: 3, min_quantity: 10, shop_link: 'https://allegro.pl', location_id: 1, responsible_person: 'Bernie', category_id: 3 },
+    { id: 'C-EL-0001', name: 'Cyna bezołowiowa Sn99', quantity_stored: 8, min_quantity: 5, shop_link: 'https://tme.eu', location_id: 2, responsible_person: 'Kamil', category_id: 1 },
+    { id: 'C-MM-0002', name: 'Śruby M3x10 imbusowe (szt)', quantity_stored: 120, min_quantity: 200, shop_link: 'https://sruby.pl', location_id: 1, responsible_person: 'Bernie', category_id: 3 },
+    { id: 'C-MM-0003', name: 'Opaski zaciskowe czarne (szt)', quantity_stored: 45, min_quantity: 100, shop_link: 'https://tme.eu', location_id: 3, responsible_person: 'Adam Kowalski', category_id: 3 },
   ];
 
   const fetchData = async () => {
     try {
       setLoading(true);
       
-      const [locsRes, itemsRes, consRes] = await Promise.all([
+      const [locsRes, itemsRes, consRes, catsRes] = await Promise.all([
         supabase.from('locations').select('*').eq('type', 'permanent'),
         supabase.from('items').select('*'),
-        supabase.from('consumables').select('*')
+        supabase.from('consumables').select('*'),
+        supabase.from('categories').select('*').order('name')
       ]);
 
-      if (locsRes.error || itemsRes.error || consRes.error) {
+      if (locsRes.error || itemsRes.error || consRes.error || catsRes.error) {
         throw new Error('Supabase fetch failed');
       }
 
       setLocations(locsRes.data || []);
       setItems(itemsRes.data || []);
       setConsumables(consRes.data || []);
+      setCategories(catsRes.data || []);
       setIsDemoMode(false);
     } catch (err) {
       console.warn('Failed to load Supabase data, enabling mock mode:', err);
@@ -148,6 +172,7 @@ export default function MagazynPage() {
       setLocations(mockLocations);
       setItems(mockItems);
       setConsumables(mockConsumables);
+      setCategories(mockCategories);
     } finally {
       setLoading(false);
     }
@@ -178,7 +203,7 @@ export default function MagazynPage() {
   };
 
   // --- Quantity Adjustment (Warehouse view) ---
-  const handleQuantityChange = async (consumableId: number, currentQty: number, delta: number) => {
+  const handleQuantityChange = async (consumableId: string, currentQty: number, delta: number) => {
     const item = consumablesRef.current.find(c => c.id === consumableId);
     if (!item) return;
 
@@ -406,14 +431,230 @@ export default function MagazynPage() {
     }
   };
 
+  // --- Category CRUD Handlers ---
+  const startEditCategory = (cat: DatabaseCategory) => {
+    setEditingCategory(cat);
+    setNewCategoryName(cat.name);
+    setNewCategoryCode(cat.code || '');
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategory(null);
+    setNewCategoryName('');
+    setNewCategoryCode('');
+  };
+
+  const handleCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim() || !newCategoryCode.trim()) return;
+
+    setModalLoading(true);
+
+    const categoryCode = newCategoryCode.trim().toUpperCase();
+    if (!/^[A-Z]{2,3}$/.test(categoryCode)) {
+      showToast('Kod kategorii musi składać się z 2-3 liter (np. EL, NA)', 'error');
+      setModalLoading(false);
+      return;
+    }
+
+    if (editingCategory) {
+      // Edit mode
+      if (isDemoMode) {
+        setCategories(prev =>
+          prev.map(c => c.id === editingCategory.id ? { ...c, name: newCategoryName.trim(), code: categoryCode } : c)
+        );
+        cancelEditCategory();
+        setModalLoading(false);
+        showToast('Zaktualizowano kategorię (Tryb Demo)');
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('categories')
+          .update({ name: newCategoryName.trim(), code: categoryCode })
+          .eq('id', editingCategory.id);
+
+        if (error) throw error;
+
+        cancelEditCategory();
+        const catsRes = await supabase.from('categories').select('*').order('name');
+        setCategories(catsRes.data || []);
+        showToast('Zaktualizowano kategorię');
+      } catch (err: any) {
+        alert('Błąd podczas edycji kategorii: ' + err.message);
+      } finally {
+        setModalLoading(false);
+      }
+    } else {
+      // Create mode
+      if (isDemoMode) {
+        const newCat: DatabaseCategory = {
+          id: Date.now(),
+          name: newCategoryName.trim(),
+          code: categoryCode
+        };
+        setCategories(prev => [...prev, newCat]);
+        setNewCategoryName('');
+        setNewCategoryCode('');
+        setModalLoading(false);
+        showToast('Utworzono kategorię (Tryb Demo)');
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('categories')
+          .insert({ 
+            name: newCategoryName.trim(),
+            code: categoryCode
+          });
+
+        if (error) throw error;
+
+        setNewCategoryName('');
+        setNewCategoryCode('');
+        const catsRes = await supabase.from('categories').select('*').order('name');
+        setCategories(catsRes.data || []);
+        showToast('Utworzono nową kategorię');
+      } catch (err: any) {
+        alert('Błąd podczas tworzenia kategorii: ' + err.message);
+      } finally {
+        setModalLoading(false);
+      }
+    }
+  };
+
+  const handleDeleteCategory = async (catId: number) => {
+    if (!confirm('Czy na pewno chcesz usunąć tę kategorię? Przypisane do niej narzędzia oraz materiały stracą to przypisanie (kategoria zostanie wyczyszczona).')) {
+      return;
+    }
+
+    setModalLoading(true);
+
+    if (isDemoMode) {
+      setCategories(prev => prev.filter(c => c.id !== catId));
+      setItems(prev => prev.map(i => i.category_id === catId ? { ...i, category_id: null } : i));
+      setConsumables(prev => prev.map(c => c.category_id === catId ? { ...c, category_id: null } : c));
+      setModalLoading(false);
+      showToast('Usunięto kategorię (Tryb Demo)');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', catId);
+
+      if (error) throw error;
+
+      fetchData();
+      showToast('Usunięto kategorię');
+    } catch (err: any) {
+      alert('Błąd usuwania kategorii: ' + err.message);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  // --- SKU Suggestion Logic ---
+  const suggestNextSku = async (type: 'I' | 'C', categoryId: number | null): Promise<string> => {
+    if (!categoryId) return '';
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat || !cat.code) return '';
+    const code = cat.code.toUpperCase();
+    const prefix = `${type}-${code}-`;
+
+    if (isDemoMode) {
+      let highestNum = 0;
+      if (type === 'I') {
+        items.forEach(item => {
+          if (item.id && item.id.toUpperCase().startsWith(prefix)) {
+            const parts = item.id.split('-');
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart, 10);
+            if (!isNaN(num) && num > highestNum) {
+              highestNum = num;
+            }
+          }
+        });
+      } else {
+        consumables.forEach(c => {
+          if (c.id && c.id.toUpperCase().startsWith(prefix)) {
+            const parts = c.id.split('-');
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart, 10);
+            if (!isNaN(num) && num > highestNum) {
+              highestNum = num;
+            }
+          }
+        });
+      }
+      const nextNum = highestNum + 1;
+      const paddedNum = nextNum.toString().padStart(4, '0');
+      return `${prefix}${paddedNum}`;
+    } else {
+      const table = type === 'I' ? 'items' : 'consumables';
+      const { data, error } = await supabase
+        .from(table)
+        .select('id')
+        .like('id', `${prefix}%`)
+        .order('id', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching highest ID:', error);
+        return `${prefix}0001`;
+      }
+
+      if (data && data.length > 0) {
+        const lastId = data[0].id;
+        const parts = lastId.split('-');
+        const lastPart = parts[parts.length - 1];
+        const num = parseInt(lastPart, 10);
+        if (!isNaN(num)) {
+          const nextNum = num + 1;
+          const paddedNum = nextNum.toString().padStart(4, '0');
+          return `${prefix}${paddedNum}`;
+        }
+      }
+      return `${prefix}0001`;
+    }
+  };
+
+  const handleItemCategoryChange = async (catIdStr: string) => {
+    setItemCategoryId(catIdStr);
+    if (!editingItem && catIdStr) {
+      const catId = parseInt(catIdStr, 10);
+      if (!isNaN(catId)) {
+        const suggested = await suggestNextSku('I', catId);
+        setItemIdInput(suggested);
+      }
+    }
+  };
+
+  const handleConsCategoryChange = async (catIdStr: string) => {
+    setConsCategoryId(catIdStr);
+    if (!editingConsumable && catIdStr) {
+      const catId = parseInt(catIdStr, 10);
+      if (!isNaN(catId)) {
+        const suggested = await suggestNextSku('C', catId);
+        setConsIdInput(suggested);
+      }
+    }
+  };
+
   // --- Item CRUD Handlers ---
   const openAddItemModal = () => {
     setEditingItem(null);
+    setItemIdInput('');
     setItemName('');
     setItemResponsible('');
     setItemLink('');
     setItemLocId(locations.length > 0 ? locations[0].id.toString() : '');
     setItemStatus('in_workshop');
+    setItemCategoryId('');
     
     // Auto-fill responsible person from default cabinet manager
     if (locations.length > 0 && locations[0].responsible_person) {
@@ -425,20 +666,32 @@ export default function MagazynPage() {
 
   const openEditItemModal = (item: DatabaseItem) => {
     setEditingItem(item);
+    setItemIdInput(item.id);
     setItemName(item.name);
     setItemResponsible(item.responsible_person);
     setItemLink(item.shop_link || '');
     setItemLocId(item.location_id ? item.location_id.toString() : '');
     setItemStatus(item.status);
+    setItemCategoryId(item.category_id ? item.category_id.toString() : '');
     setIsItemModalOpen(true);
   };
 
   const handleItemSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemName.trim() || !itemResponsible.trim()) return;
+    if (!itemName.trim() || !itemResponsible.trim() || !itemIdInput.trim()) return;
 
     setModalLoading(true);
+    
+    // Walidacja formatu ID (SKU)
+    const skuRegex = /^(I|C)-[A-Z]{2,3}-\d{4}$/;
+    if (!skuRegex.test(itemIdInput.trim())) {
+      showToast('Błędny format ID! Wymagany format: I-KOD-XXXX, np. I-EL-0001', 'error');
+      setModalLoading(false);
+      return;
+    }
+
     const parsedLocId = parseInt(itemLocId) || null;
+    const parsedCategoryId = parseInt(itemCategoryId) || null;
 
     if (isDemoMode) {
       if (editingItem) {
@@ -448,16 +701,23 @@ export default function MagazynPage() {
           responsible_person: itemResponsible.trim(),
           shop_link: itemLink.trim(),
           location_id: parsedLocId as any,
-          status: itemStatus
+          status: itemStatus,
+          category_id: parsedCategoryId
         } : i));
       } else {
+        if (items.some(i => i.id.toUpperCase() === itemIdInput.trim().toUpperCase())) {
+          showToast('Przedmiot o tym ID już istnieje!', 'error');
+          setModalLoading(false);
+          return;
+        }
         const newItem: DatabaseItem = {
-          id: Date.now(),
+          id: itemIdInput.trim(),
           name: itemName.trim(),
           responsible_person: itemResponsible.trim(),
           shop_link: itemLink.trim(),
           location_id: parsedLocId as any,
-          status: itemStatus
+          status: itemStatus,
+          category_id: parsedCategoryId
         };
         setItems(prev => [...prev, newItem]);
       }
@@ -475,7 +735,8 @@ export default function MagazynPage() {
             responsible_person: itemResponsible.trim(),
             shop_link: itemLink.trim(),
             location_id: parsedLocId,
-            status: itemStatus
+            status: itemStatus,
+            category_id: parsedCategoryId
           })
           .eq('id', editingItem.id);
 
@@ -484,11 +745,13 @@ export default function MagazynPage() {
         const { error } = await supabase
           .from('items')
           .insert({
+            id: itemIdInput.trim(),
             name: itemName.trim(),
             responsible_person: itemResponsible.trim(),
             shop_link: itemLink.trim(),
             location_id: parsedLocId,
-            status: itemStatus
+            status: itemStatus,
+            category_id: parsedCategoryId
           });
 
         if (error) throw error;
@@ -503,7 +766,7 @@ export default function MagazynPage() {
     }
   };
 
-  const handleDeleteItem = async (itemId: number) => {
+  const handleDeleteItem = async (itemId: string) => {
     if (!confirm('Czy na pewno chcesz usunąć ten przedmiot z inwentarza?')) return;
 
     setModalLoading(true);
@@ -530,12 +793,14 @@ export default function MagazynPage() {
   // --- Consumable CRUD Handlers ---
   const openAddConsumableModal = () => {
     setEditingConsumable(null);
+    setConsIdInput('');
     setConsName('');
     setConsQty(0);
     setConsMinQty(1);
     setConsLink('');
     setConsLocId(locations.length > 0 ? locations[0].id.toString() : '');
     setConsResponsible('');
+    setConsCategoryId('');
     
     // Auto-fill responsible person from default cabinet manager
     if (locations.length > 0 && locations[0].responsible_person) {
@@ -547,21 +812,33 @@ export default function MagazynPage() {
 
   const openEditConsumableModal = (c: DatabaseConsumable) => {
     setEditingConsumable(c);
+    setConsIdInput(c.id);
     setConsName(c.name);
     setConsQty(c.quantity_stored);
     setConsMinQty(c.min_quantity);
     setConsLink(c.shop_link || '');
     setConsLocId(c.location_id ? c.location_id.toString() : '');
     setConsResponsible(c.responsible_person || '');
+    setConsCategoryId(c.category_id ? c.category_id.toString() : '');
     setIsConsumableModalOpen(true);
   };
 
   const handleConsumableSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consName.trim() || consQty < 0 || consMinQty < 0) return;
+    if (!consName.trim() || consQty < 0 || consMinQty < 0 || !consIdInput.trim()) return;
 
     setModalLoading(true);
+
+    // Walidacja formatu ID (SKU)
+    const skuRegex = /^(I|C)-[A-Z]{2,3}-\d{4}$/;
+    if (!skuRegex.test(consIdInput.trim())) {
+      showToast('Błędny format ID! Wymagany format: C-KOD-XXXX, np. C-NA-0002', 'error');
+      setModalLoading(false);
+      return;
+    }
+
     const parsedLocId = parseInt(consLocId) || null;
+    const parsedCategoryId = parseInt(consCategoryId) || null;
 
     if (isDemoMode) {
       if (editingConsumable) {
@@ -572,17 +849,24 @@ export default function MagazynPage() {
           min_quantity: consMinQty,
           shop_link: consLink.trim(),
           location_id: parsedLocId as any,
-          responsible_person: consResponsible.trim() || null
+          responsible_person: consResponsible.trim() || null,
+          category_id: parsedCategoryId
         } : c));
       } else {
+        if (consumables.some(c => c.id.toUpperCase() === consIdInput.trim().toUpperCase())) {
+          showToast('Materiał o tym ID już istnieje!', 'error');
+          setModalLoading(false);
+          return;
+        }
         const newCons: DatabaseConsumable = {
-          id: Date.now(),
+          id: consIdInput.trim(),
           name: consName.trim(),
           quantity_stored: consQty,
           min_quantity: consMinQty,
           shop_link: consLink.trim(),
           location_id: parsedLocId as any,
-          responsible_person: consResponsible.trim() || null
+          responsible_person: consResponsible.trim() || null,
+          category_id: parsedCategoryId
         };
         setConsumables(prev => [...prev, newCons]);
       }
@@ -604,7 +888,8 @@ export default function MagazynPage() {
             min_quantity: consMinQty,
             shop_link: consLink.trim(),
             location_id: parsedLocId,
-            responsible_person: consResponsible.trim() || null
+            responsible_person: consResponsible.trim() || null,
+            category_id: parsedCategoryId
           })
           .eq('id', editingConsumable.id);
 
@@ -613,12 +898,14 @@ export default function MagazynPage() {
         const { error } = await supabase
           .from('consumables')
           .insert({
+            id: consIdInput.trim(),
             name: consName.trim(),
             quantity_stored: consQty,
             min_quantity: consMinQty,
             shop_link: consLink.trim(),
             location_id: parsedLocId,
-            responsible_person: consResponsible.trim() || null
+            responsible_person: consResponsible.trim() || null,
+            category_id: parsedCategoryId
           });
 
         if (error) throw error;
@@ -634,7 +921,7 @@ export default function MagazynPage() {
     }
   };
 
-  const handleDeleteConsumable = async (consId: number) => {
+  const handleDeleteConsumable = async (consId: string) => {
     if (!confirm('Czy na pewno chcesz usunąć ten materiał zużywalny? Z bazy zostaną również usunięte żądania wyjazdowe tego materiału.')) return;
 
     setModalLoading(true);
@@ -690,42 +977,24 @@ export default function MagazynPage() {
     const rawInput = scanIdInput.trim();
     if (!rawInput) return;
 
-    // Check for prefixes: I / C
-    const itemMatch = rawInput.match(/^[iI](\d+)$/);
-    const consMatch = rawInput.match(/^[cC](\d+)$/);
-
-    let searchType: 'item' | 'consumable' | 'any' = 'any';
-    let id: number;
-
-    if (itemMatch) {
-      searchType = 'item';
-      id = parseInt(itemMatch[1]);
-    } else if (consMatch) {
-      searchType = 'consumable';
-      id = parseInt(consMatch[1]);
-    } else {
-      id = parseInt(rawInput);
-      if (isNaN(id)) {
-        setScanError('Wpisz poprawne ID (np. 102) lub użyj prefixu (np. I102 dla sprzętu, C102 dla materiału).');
-        return;
-      }
+    // Sprawdzamy pierwszą literę identyfikatora
+    const firstChar = rawInput[0]?.toUpperCase();
+    if (firstChar !== 'I' && firstChar !== 'C') {
+      setScanError('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
+      return;
     }
 
+    const searchType = firstChar === 'I' ? 'item' : 'consumable';
+
     // 1. Search in Items
-    const scannedItem = (searchType === 'any' || searchType === 'item') 
-      ? items.find(i => i.id === id) 
+    const scannedItem = searchType === 'item'
+      ? items.find(i => i.id.toUpperCase() === rawInput.toUpperCase())
       : null;
 
     // 2. Search in Consumables
-    const scannedCons = (searchType === 'any' || searchType === 'consumable') 
-      ? consumables.find(c => c.id === id) 
+    const scannedCons = searchType === 'consumable'
+      ? consumables.find(c => c.id.toUpperCase() === rawInput.toUpperCase())
       : null;
-
-    // Handle collision when no prefix was supplied
-    if (searchType === 'any' && scannedItem && scannedCons) {
-      setScanError(`Kolizja ID: znaleziono sprzęt i materiał o ID ${id}. Wpisz I${id} dla sprzętu lub C${id} dla materiału.`);
-      return;
-    }
 
     if (scannedItem) {
       setScanResult({
@@ -771,21 +1040,31 @@ export default function MagazynPage() {
     };
   };
 
-  // Filter lists based on selected location & search query
+  // Filter lists based on selected location, category & search query
   const filteredItems = items.filter(item => {
     const matchesLoc = selectedLocationId === 'all' || item.location_id === parseInt(selectedLocationId);
+    const matchesCat = selectedCategoryId === 'all'
+      ? true
+      : selectedCategoryId === 'none'
+      ? item.category_id === null
+      : item.category_id === parseInt(selectedCategoryId);
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           item.responsible_person.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.id.toString() === searchQuery.trim();
-    return matchesLoc && matchesSearch;
+                          item.id.toLowerCase().includes(searchQuery.toLowerCase().trim());
+    return matchesLoc && matchesCat && matchesSearch;
   });
 
   const filteredConsumables = consumables.filter(cons => {
     const matchesLoc = selectedLocationId === 'all' || cons.location_id === parseInt(selectedLocationId);
+    const matchesCat = selectedCategoryId === 'all'
+      ? true
+      : selectedCategoryId === 'none'
+      ? cons.category_id === null
+      : cons.category_id === parseInt(selectedCategoryId);
     const matchesSearch = cons.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (cons.responsible_person || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          cons.id.toString() === searchQuery.trim();
-    return matchesLoc && matchesSearch;
+                          cons.id.toLowerCase().includes(searchQuery.toLowerCase().trim());
+    return matchesLoc && matchesCat && matchesSearch;
   });
 
   // Sort lists
@@ -844,6 +1123,30 @@ export default function MagazynPage() {
     return 0;
   });
 
+  const renderCategoryBadge = (categoryId: number | null | undefined) => {
+    if (!categoryId) return null;
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return null;
+
+    const colorClasses = [
+      'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20',
+      'bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20',
+      'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20',
+      'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20',
+      'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20',
+      'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20',
+      'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20',
+      'bg-pink-500/10 text-pink-400 border-pink-500/20 hover:bg-pink-500/20',
+    ];
+    const colorClass = colorClasses[cat.id % colorClasses.length];
+
+    return (
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-all duration-200 cursor-default select-none ${colorClass}`}>
+        {cat.name}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
       {/* Header & CRUD Menu buttons */}
@@ -881,6 +1184,14 @@ export default function MagazynPage() {
             <Settings className="h-4 w-4 text-zinc-400" />
             Zarządzaj Pojemnikami
           </button>
+
+          <button
+            onClick={() => setIsCategoriesModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 hover:border-zinc-700 active:scale-95 transition-all duration-150"
+          >
+            <Tag className="h-4 w-4 text-zinc-400" />
+            Zarządzaj Kategoriami
+          </button>
           
           <button 
             onClick={fetchData} 
@@ -896,7 +1207,7 @@ export default function MagazynPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main Controls & Filters */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row gap-4">
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row gap-4">
             {/* Search Input */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-zinc-500" />
@@ -910,20 +1221,38 @@ export default function MagazynPage() {
             </div>
             
             {/* Location Filter */}
-            <div className="relative min-w-[200px]">
+            <div className="relative min-w-[180px]">
               <select
                 value={selectedLocationId}
                 onChange={(e) => setSelectedLocationId(e.target.value)}
-                className="w-full px-4 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500/50 transition-colors appearance-none"
+                className="w-full px-4 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500/50 transition-colors appearance-none bg-none"
               >
                 <option value="all">Wszystkie pojemniki</option>
                 {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>
+                  <option key={loc.id} value={loc.id} className="bg-zinc-950 text-zinc-200">
                     {loc.name} {loc.room ? `(${loc.room})` : ''}
                   </option>
                 ))}
               </select>
-              <div className="absolute right-3 top-3 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
+            </div>
+
+            {/* Category Filter */}
+            <div className="relative min-w-[180px]">
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="w-full px-4 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500/50 transition-colors appearance-none bg-none"
+              >
+                <option value="all">Wszystkie kategorie</option>
+                <option value="none">Brak kategorii</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id} className="bg-zinc-950 text-zinc-200">
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
             </div>
           </div>
 
@@ -1023,7 +1352,12 @@ export default function MagazynPage() {
                             className="hover:bg-zinc-900/30 transition-colors duration-150"
                           >
                             <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{item.id}</td>
-                            <td className="py-3.5 px-4 font-semibold text-zinc-100">{item.name}</td>
+                            <td className="py-3.5 px-4 font-semibold text-zinc-100">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{item.name}</span>
+                                {renderCategoryBadge(item.category_id)}
+                              </div>
+                            </td>
                             <td className="py-3.5 px-4">
                               <div className="flex flex-col">
                                 <span className="flex items-center gap-1 text-zinc-350 font-medium">
@@ -1125,13 +1459,16 @@ export default function MagazynPage() {
                             }`}
                           >
                             <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{cons.id}</td>
-                            <td className="py-3.5 px-4 font-semibold text-zinc-100 flex items-center gap-2">
-                              {cons.name}
-                              {isLowStock && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                                  <AlertCircle className="h-3 w-3" /> Kup
-                                </span>
-                              )}
+                            <td className="py-3.5 px-4 font-semibold text-zinc-100">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{cons.name}</span>
+                                {renderCategoryBadge(cons.category_id)}
+                                {isLowStock && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                    <AlertCircle className="h-3 w-3" /> Kup
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3.5 px-4">
                               <div className="flex flex-col">
@@ -1275,7 +1612,7 @@ export default function MagazynPage() {
               </div>
             )}
 
-            <div className="text-zinc-500 text-xs leading-relaxed border-t border-zinc-800/80 pt-4">
+            <div className="text-zinc-550 text-xs leading-relaxed border-t border-zinc-800/80 pt-4">
               <span className="font-semibold text-zinc-400">Instrukcja:</span> Wpisz <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">101</code> do <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">104</code> dla narzędzi trwałych, lub <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">201</code> do <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">204</code> dla materiałów, aby sprawdzić zachowanie skanera.
             </div>
           </div>
@@ -1283,151 +1620,214 @@ export default function MagazynPage() {
       </div>
 
       {/* --- MODALS SECTION WITH ANIMATIONS --- */}
+      {isLocationsModalOpen && (() => {
+        const filteredLocsForModal = locations.filter(loc => {
+          const q = locSearchQuery.toLowerCase();
+          return loc.name.toLowerCase().includes(q) || 
+                 (loc.room || '').toLowerCase().includes(q) ||
+                 (loc.responsible_person || '').toLowerCase().includes(q);
+        });
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
+            <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-blue-400" />
+                  Zarządzaj Pojemnikami i Szafami
+                </h3>
+                <button 
+                  onClick={() => { setIsLocationsModalOpen(false); setLocSearchQuery(''); cancelEditLocation(); }}
+                  className="text-zinc-450 hover:text-white transition-colors active:scale-95 duration-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-      {/* 1. Modal: Manage Locations */}
-      {isLocationsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Settings className="h-5 w-5 text-blue-400" />
-                Zarządzaj Pojemnikami i Szafami
-              </h3>
-              <button 
-                onClick={() => { setIsLocationsModalOpen(false); cancelEditLocation(); }}
-                className="text-zinc-450 hover:text-white transition-colors active:scale-95 duration-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+              <div className="p-6 md:p-8 space-y-5">
+                {/* Form to Add/Edit Location */}
+                <form onSubmit={handleLocationSubmit} className="space-y-4 bg-zinc-950/50 p-5 border border-zinc-800/80 rounded-xl">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">
+                    {editingLocation ? 'Edytuj Miejsce' : 'Dodaj Nowe Miejsce'}
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                        <Boxes className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nazwa pojemnika / szafy"
+                        value={newLocName}
+                        onChange={(e) => setNewLocName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                      />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                        <MapPin className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Pokój / Ciężarówka / Miejsce"
+                        value={newLocRoom}
+                        onChange={(e) => setNewLocRoom(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <User className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Domyślny opiekun pojemnika"
+                      value={newLocResponsible}
+                      onChange={(e) => setNewLocResponsible(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-505 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    />
+                  </div>
 
-            <div className="p-6 space-y-6">
-              {/* Form to Add/Edit Location */}
-              <form onSubmit={handleLocationSubmit} className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-850 rounded-xl">
-                <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">
-                  {editingLocation ? 'Edytuj Miejsce' : 'Dodaj Nowe Miejsce'}
-                </h4>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nazwa pojemnika / szafy"
-                    value={newLocName}
-                    onChange={(e) => setNewLocName(e.target.value)}
-                    className="px-3 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Pokój / Ciężarówka / Miejsce"
-                    value={newLocRoom}
-                    onChange={(e) => setNewLocRoom(e.target.value)}
-                    className="px-3 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
-                </div>
-                
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Domyślny opiekun pojemnika"
-                    value={newLocResponsible}
-                    onChange={(e) => setNewLocResponsible(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-                  />
-                  {editingLocation && (
+                  <div className="flex justify-end gap-3 pt-3 border-t border-zinc-800/80">
+                    {editingLocation && (
+                      <button
+                        type="button"
+                        onClick={cancelEditLocation}
+                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-xs font-semibold rounded-lg transition-colors shrink-0 active:scale-95 duration-100"
+                      >
+                        Anuluj
+                      </button>
+                    )}
                     <button
-                      type="button"
-                      onClick={cancelEditLocation}
-                      className="px-3 py-2 bg-zinc-805 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-xs font-semibold rounded-lg transition-colors shrink-0 active:scale-95 duration-100"
+                      type="submit"
+                      disabled={modalLoading}
+                      className="px-5 py-2 bg-blue-500 text-black hover:bg-blue-400 font-semibold text-sm rounded-lg transition-colors shrink-0 disabled:opacity-50 active:scale-95 duration-100"
                     >
-                      Anuluj
+                      {editingLocation ? 'Zapisz' : 'Stwórz'}
                     </button>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={modalLoading}
-                    className="px-4 py-2 bg-blue-500 text-black hover:bg-blue-400 font-semibold text-sm rounded-lg transition-colors shrink-0 disabled:opacity-50 active:scale-95 duration-100"
-                  >
-                    {editingLocation ? 'Zapisz' : 'Stwórz'}
-                  </button>
-                </div>
-              </form>
+                  </div>
+                </form>
 
-              {/* Current Locations List */}
-              <div className="space-y-2 max-h-56 overflow-y-auto border border-zinc-800 bg-zinc-950/40 rounded-lg p-2">
-                {locations.length === 0 ? (
-                  <p className="text-xs text-zinc-500 text-center py-4">Brak zdefiniowanych pojemników stacjonarnych.</p>
-                ) : (
-                  locations.map(loc => (
-                    <div key={loc.id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-850 hover:border-zinc-800 transition-all">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-zinc-500" />
-                          {loc.name}
-                        </span>
-                        <div className="text-[10px] text-zinc-500 mt-1 flex gap-3">
-                          <span>Pokój: <span className="text-zinc-400 font-medium">{loc.room || 'brak'}</span></span>
-                          <span>Opiekun: <span className="text-zinc-400 font-medium">{loc.responsible_person || 'brak'}</span></span>
+                {/* Filter Search Input */}
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <Search className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Wyszukaj szafę/skrzynię po nazwie, pokoju lub opiekunie..."
+                    value={locSearchQuery}
+                    onChange={(e) => setLocSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                  />
+                </div>
+
+                {/* Current Locations List */}
+                <div className="space-y-2 max-h-[400px] overflow-y-auto border border-zinc-800 bg-zinc-950/40 rounded-lg p-2">
+                  {filteredLocsForModal.length === 0 ? (
+                    <p className="text-xs text-zinc-500 text-center py-6">
+                      {locations.length === 0 ? 'Brak zdefiniowanych pojemników stacjonarnych.' : 'Brak wyników wyszukiwania.'}
+                    </p>
+                  ) : (
+                    filteredLocsForModal.map(loc => (
+                      <div key={loc.id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/40 border border-zinc-805 hover:border-zinc-700/80 hover:bg-zinc-900 transition-all">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                            {loc.name}
+                          </span>
+                          <div className="text-[10px] text-zinc-500 mt-1 flex gap-3">
+                            <span>Pokój: <span className="text-zinc-400 font-medium">{loc.room || 'brak'}</span></span>
+                            <span>Opiekun: <span className="text-zinc-400 font-medium">{loc.responsible_person || 'brak'}</span></span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => startEditLocation(loc)}
+                            disabled={modalLoading}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 active:scale-95 transition-all disabled:opacity-50"
+                            title="Edytuj pojemnik"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLocation(loc.id)}
+                            disabled={modalLoading}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all disabled:opacity-50"
+                            title="Usuń pojemnik"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => startEditLocation(loc)}
-                          disabled={modalLoading}
-                          className="p-2 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 active:scale-95 transition-all disabled:opacity-50"
-                          title="Edytuj pojemnik"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteLocation(loc.id)}
-                          disabled={modalLoading}
-                          className="p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all disabled:opacity-50"
-                          title="Usuń pojemnik"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* 2. Modal: Add/Edit Item */}
+        );
+      })()}        {/* 2. Modal: Add/Edit Item */}
       {isItemModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+          <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Package className="h-5 w-5 text-blue-400" />
                 {editingItem ? 'Edytuj Przedmiot Trwały' : 'Dodaj Przedmiot Trwały'}
               </h3>
               <button 
                 onClick={() => setIsItemModalOpen(false)}
-                className="text-zinc-450 hover:text-white transition-colors"
+                className="text-zinc-455 hover:text-white transition-colors active:scale-95 duration-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleItemSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleItemSubmit} className="p-6 md:p-8 space-y-5">
               {/* Item Name */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Nazwa przedmiotu / narzędzia
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="np. Wkrętarka DeWalt 18V"
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <Package className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="np. Wkrętarka DeWalt 18V"
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Item ID / SKU */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5 flex justify-between items-center">
+                  <span>ID przedmiotu (kod QR / SKU)</span>
+                  <span className="text-[10px] text-zinc-500 font-normal lowercase font-sans">format: I-KOD-0000</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <QrCode className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    disabled={!!editingItem}
+                    placeholder="Wybierz kategorię, aby wygenerować ID lub wpisz ręcznie..."
+                    value={itemIdInput}
+                    onChange={(e) => setItemIdInput(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
 
               {/* Location Select (SearchableSelect component) */}
@@ -1438,6 +1838,21 @@ export default function MagazynPage() {
                   onChange={handleItemLocChange}
                   label="Pojemnik / Szafa"
                   placeholder="Wyszukaj szafę lub pokój..."
+                  searchLabel="Filtrowanie pojemników..."
+                  icon={Boxes}
+                />
+              </div>
+
+              {/* Category Select (SearchableSelect component) */}
+              <div>
+                <SearchableSelect
+                  options={categories}
+                  value={itemCategoryId}
+                  onChange={handleItemCategoryChange}
+                  label="Kategoria"
+                  placeholder="Wyszukaj lub wybierz kategorię..."
+                  searchLabel="Filtrowanie kategorii..."
+                  icon={Tag}
                 />
               </div>
 
@@ -1446,14 +1861,19 @@ export default function MagazynPage() {
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Opiekun / Osoba odpowiedzialna
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Imię i nazwisko"
-                  value={itemResponsible}
-                  onChange={(e) => setItemResponsible(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-655 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <User className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Imię i nazwisko"
+                    value={itemResponsible}
+                    onChange={(e) => setItemResponsible(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                  />
+                </div>
               </div>
 
               {/* Shop Link */}
@@ -1461,13 +1881,18 @@ export default function MagazynPage() {
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Link do sklepu (opcjonalnie)
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://allegro.pl/..."
-                  value={itemLink}
-                  onChange={(e) => setItemLink(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <ExternalLink className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="url"
+                    placeholder="https://allegro.pl/..."
+                    value={itemLink}
+                    onChange={(e) => setItemLink(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                  />
+                </div>
               </div>
 
               {/* Status Select */}
@@ -1475,19 +1900,25 @@ export default function MagazynPage() {
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Status sprzętu
                 </label>
-                <select
-                  value={itemStatus}
-                  onChange={(e) => setItemStatus(e.target.value as any)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
-                >
-                  <option value="in_workshop">W warsztacie</option>
-                  <option value="assigned_to_event">Przypisany na wyjazd</option>
-                  <option value="packed">Spakowany do skrzyni</option>
-                </select>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-400 pointer-events-none">
+                    <Settings className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <select
+                    value={itemStatus}
+                    onChange={(e) => setItemStatus(e.target.value as any)}
+                    className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm appearance-none bg-none"
+                  >
+                    <option value="in_workshop" className="bg-zinc-950 text-zinc-250">W warsztacie</option>
+                    <option value="assigned_to_event" className="bg-zinc-950 text-zinc-250">Przypisany na wyjazd</option>
+                    <option value="packed" className="bg-zinc-950 text-zinc-250">Spakowany do skrzyni</option>
+                  </select>
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
+                </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex justify-between items-center pt-4 border-t border-zinc-800/80 mt-4">
+              <div className="flex justify-between items-center pt-4 border-t border-zinc-805/80 mt-4">
                 {editingItem ? (
                   <button
                     type="button"
@@ -1527,34 +1958,61 @@ export default function MagazynPage() {
       {/* 3. Modal: Add/Edit Consumable */}
       {isConsumableModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+          <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-blue-400" />
                 {editingConsumable ? 'Edytuj Materiał Zużywalny' : 'Dodaj Materiał Zużywalny'}
               </h3>
               <button 
                 onClick={() => setIsConsumableModalOpen(false)}
-                className="text-zinc-450 hover:text-white transition-colors"
+                className="text-zinc-455 hover:text-white transition-colors active:scale-95 duration-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleConsumableSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleConsumableSubmit} className="p-6 md:p-8 space-y-5">
               {/* Consumable Name */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Nazwa materiału
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="np. Śruby M4x20 łeb stożkowy (szt)"
-                  value={consName}
-                  onChange={(e) => setConsName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <Package className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="np. Śruby M4x20 łeb stożkowy (szt)"
+                    value={consName}
+                    onChange={(e) => setConsName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Consumable ID / SKU */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5 flex justify-between items-center">
+                  <span>ID materiału (kod QR / SKU)</span>
+                  <span className="text-[10px] text-zinc-500 font-normal lowercase font-sans">format: C-KOD-0000</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <QrCode className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    disabled={!!editingConsumable}
+                    placeholder="Wybierz kategorię, aby wygenerować ID lub wpisz ręcznie..."
+                    value={consIdInput}
+                    onChange={(e) => setConsIdInput(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
 
               {/* Location Select (SearchableSelect component) */}
@@ -1565,6 +2023,21 @@ export default function MagazynPage() {
                   onChange={handleConsLocChange}
                   label="Pojemnik / Szafa"
                   placeholder="Wyszukaj szafę lub pokój..."
+                  searchLabel="Filtrowanie pojemników..."
+                  icon={Boxes}
+                />
+              </div>
+
+              {/* Category Select (SearchableSelect component) */}
+              <div>
+                <SearchableSelect
+                  options={categories}
+                  value={consCategoryId}
+                  onChange={handleConsCategoryChange}
+                  label="Kategoria"
+                  placeholder="Wyszukaj lub wybierz kategorię..."
+                  searchLabel="Filtrowanie kategorii..."
+                  icon={Tag}
                 />
               </div>
 
@@ -1574,14 +2047,19 @@ export default function MagazynPage() {
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                     Stan magazynu
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={consQty}
-                    onChange={(e) => setConsQty(parseInt(e.target.value) || 0)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-blue-500"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <Boxes className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={consQty}
+                      onChange={(e) => setConsQty(parseInt(e.target.value) || 0)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                    />
+                  </div>
                 </div>
 
                 {/* Min Quantity */}
@@ -1589,14 +2067,19 @@ export default function MagazynPage() {
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                     Minimalny stan
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={consMinQty}
-                    onChange={(e) => setConsMinQty(parseInt(e.target.value) || 0)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-blue-500"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <AlertCircle className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={consMinQty}
+                      onChange={(e) => setConsMinQty(parseInt(e.target.value) || 0)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1605,14 +2088,19 @@ export default function MagazynPage() {
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Opiekun materiału
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Imię i nazwisko"
-                  value={consResponsible}
-                  onChange={(e) => setConsResponsible(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <User className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Imię i nazwisko"
+                    value={consResponsible}
+                    onChange={(e) => setConsResponsible(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                  />
+                </div>
               </div>
 
               {/* Shop Link */}
@@ -1620,13 +2108,18 @@ export default function MagazynPage() {
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
                   Link do sklepu (opcjonalnie)
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://allegro.pl/..."
-                  value={consLink}
-                  onChange={(e) => setConsLink(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <ExternalLink className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="url"
+                    placeholder="https://allegro.pl/..."
+                    value={consLink}
+                    onChange={(e) => setConsLink(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                  />
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -1666,6 +2159,145 @@ export default function MagazynPage() {
           </div>
         </div>
       )}
+
+      {/* 1.5. Modal: Manage Categories */}
+      {isCategoriesModalOpen && (() => {
+        const filteredCatsForModal = categories.filter(cat => 
+          cat.name.toLowerCase().includes(catSearchQuery.toLowerCase())
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
+            <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-blue-400" />
+                  Zarządzaj Kategoriami
+                </h3>
+                <button 
+                  onClick={() => { setIsCategoriesModalOpen(false); setCatSearchQuery(''); cancelEditCategory(); }}
+                  className="text-zinc-455 hover:text-white transition-colors active:scale-95 duration-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 md:p-8 space-y-6">
+                {/* Form to Add/Edit Category */}
+                <form onSubmit={handleCategorySubmit} className="space-y-4 bg-zinc-950/50 p-5 border border-zinc-800/80 rounded-xl">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">
+                    {editingCategory ? 'Edytuj Kategorię' : 'Dodaj Nową Kategorię'}
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="relative md:col-span-2">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-550 pointer-events-none">
+                        <Tag className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nazwa kategorii (np. Pneumatyka)"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-450 pointer-events-none text-[10px] font-bold font-mono uppercase">
+                        KOD
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        maxLength={3}
+                        placeholder="np. PN"
+                        value={newCategoryCode}
+                        onChange={(e) => setNewCategoryCode(e.target.value.toUpperCase())}
+                        className="w-full pl-12 pr-4 py-2.5 text-sm rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    {editingCategory && (
+                      <button
+                        type="button"
+                        onClick={cancelEditCategory}
+                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-xs font-semibold rounded-lg transition-colors shrink-0 active:scale-95 duration-100"
+                      >
+                        Anuluj
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={modalLoading}
+                      className="px-5 py-2 bg-blue-500 text-black hover:bg-blue-400 font-bold text-sm rounded-lg transition-colors shrink-0 disabled:opacity-50 active:scale-95 duration-100"
+                    >
+                      {editingCategory ? 'Zapisz' : 'Dodaj'}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Filter Search Input */}
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <Search className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Wyszukaj kategorię..."
+                    value={catSearchQuery}
+                    onChange={(e) => setCatSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                  />
+                </div>
+
+                {/* Current Categories List */}
+                <div className="space-y-2 max-h-[400px] overflow-y-auto border border-zinc-800 bg-zinc-950/40 rounded-lg p-2">
+                  {filteredCatsForModal.length === 0 ? (
+                    <p className="text-xs text-zinc-500 text-center py-6">
+                      {categories.length === 0 ? 'Brak zdefiniowanych kategorii.' : 'Brak wyników wyszukiwania.'}
+                    </p>
+                  ) : (
+                    filteredCatsForModal.map(cat => (
+                      <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/40 border border-zinc-805 hover:border-zinc-700/80 hover:bg-zinc-900 transition-all">
+                        <span className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                          <Tag className="h-3.5 w-3.5 text-zinc-500" />
+                          {cat.name}
+                          {cat.code && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400 font-mono font-bold uppercase">
+                              {cat.code}
+                            </span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => startEditCategory(cat)}
+                            disabled={modalLoading}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 active:scale-95 transition-all disabled:opacity-50"
+                            title="Edytuj kategorię"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            disabled={modalLoading}
+                            className="p-2 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all disabled:opacity-50"
+                            title="Usuń kategorię"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Toast Notification for Web Haptics */}
       {toast && (

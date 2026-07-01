@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 
 interface SelectOption {
-  id: number;
+  id: string | number;
   name: string;
   room?: string | null;
   responsible_person?: string | null;
@@ -16,6 +16,8 @@ interface SearchableSelectProps {
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  searchLabel?: string;
+  icon?: React.ComponentType<any>;
 }
 
 export default function SearchableSelect({
@@ -23,7 +25,9 @@ export default function SearchableSelect({
   value,
   onChange,
   placeholder = 'Szukaj...',
-  label
+  label,
+  searchLabel = 'Filtrowanie...',
+  icon: Icon
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,8 +92,13 @@ export default function SearchableSelect({
         {/* Input Trigger */}
         <div 
           onClick={() => setIsOpen(true)}
-          className="relative flex items-center w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus-within:border-blue-500/50 transition-all cursor-pointer"
+          className="relative flex items-center w-full rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all cursor-pointer"
         >
+          {Icon && (
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-400 pointer-events-none">
+              <Icon className="w-5 h-5 block shrink-0" />
+            </div>
+          )}
           <input
             type="text"
             placeholder={placeholder}
@@ -98,11 +107,13 @@ export default function SearchableSelect({
               setSearchQuery(e.target.value);
               setIsOpen(true);
             }}
-            className="w-full bg-transparent text-sm focus:outline-none placeholder-zinc-650 pr-8 text-zinc-100"
+            className={`w-full bg-transparent py-2.5 text-sm focus:outline-none placeholder-zinc-500 pr-10 text-zinc-100 ${
+              Icon ? 'pl-10' : 'pl-4'
+            }`}
           />
 
           {/* Icons control */}
-          <div className="absolute right-3 flex items-center gap-1.5 text-zinc-500">
+          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-zinc-500">
             {value && (
               <button
                 type="button"
@@ -123,7 +134,7 @@ export default function SearchableSelect({
             {/* Search query header within dropdown */}
             <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-zinc-900 bg-zinc-950 text-zinc-500">
               <Search className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Filtrowanie pojemników...</span>
+              <span className="text-xs font-medium">{searchLabel}</span>
             </div>
 
             <div className="max-h-56 overflow-y-auto divide-y divide-zinc-900">

@@ -5,7 +5,8 @@ import {
   supabase, 
   DatabaseConsumable, 
   DatabaseShoppingListItem, 
-  DatabaseLocation 
+  DatabaseLocation,
+  DatabaseCategory
 } from '@/utils/supabase/client';
 import { 
   ExternalLink, 
@@ -21,7 +22,15 @@ import {
   PackageCheck,
   Search,
   ShoppingCart,
-  Inbox
+  Inbox,
+  Boxes,
+  Settings,
+  Package,
+  User,
+  Tag,
+  AlertCircle,
+  QrCode,
+  X
 } from 'lucide-react';
 import SearchableSelect from '@/app/components/SearchableSelect';
 
@@ -30,6 +39,7 @@ export default function ZakupyPage() {
   const [shoppingList, setShoppingList] = useState<DatabaseShoppingListItem[]>([]);
   const [locations, setLocations] = useState<DatabaseLocation[]>([]);
   const [allConsumables, setAllConsumables] = useState<DatabaseConsumable[]>([]);
+  const [categories, setCategories] = useState<DatabaseCategory[]>([]);
   
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -53,6 +63,7 @@ export default function ZakupyPage() {
   const [newReqShopLink, setNewReqShopLink] = useState('');
   const [newReqPrice, setNewReqPrice] = useState('');
   const [newReqSuggestedBy, setNewReqSuggestedBy] = useState('');
+  const [newReqCategoryId, setNewReqCategoryId] = useState('');
   const [newReqSubmitting, setNewReqSubmitting] = useState(false);
 
   // 3. Receive into Warehouse Modal state
@@ -65,25 +76,34 @@ export default function ZakupyPage() {
   const [receiveMinQty, setReceiveMinQty] = useState('10');
   const [receiveItemName, setReceiveItemName] = useState('');
   const [receiveItemLink, setReceiveItemLink] = useState('');
+  const [receiveCategoryId, setReceiveCategoryId] = useState('');
+  const [receiveIdInput, setReceiveIdInput] = useState('');
   const [receiveSubmitting, setReceiveSubmitting] = useState(false);
 
   // Initial Mock data for fallback
   const mockConsumables: DatabaseConsumable[] = [
-    { id: 201, name: 'Frezy węglikowe 2mm', quantity_stored: 3, min_quantity: 10, shop_link: 'https://allegro.pl', location_id: 1, responsible_person: 'Jan Kowalski' },
-    { id: 203, name: 'Śruby M3x10 imbusowe (szt)', quantity_stored: 120, min_quantity: 200, shop_link: 'https://sruby.pl', location_id: 1, responsible_person: 'Adam Nowak' },
-    { id: 204, name: 'Opaski zaciskowe czarne (szt)', quantity_stored: 45, min_quantity: 100, shop_link: 'https://tme.eu', location_id: 3, responsible_person: 'Katarzyna Zielińska' },
+    { id: 'C-MM-0001', name: 'Frezy węglikowe 2mm', quantity_stored: 3, min_quantity: 10, shop_link: 'https://allegro.pl', location_id: 1, responsible_person: 'Jan Kowalski', category_id: 3 },
+    { id: 'C-MM-0002', name: 'Śruby M3x10 imbusowe (szt)', quantity_stored: 120, min_quantity: 200, shop_link: 'https://sruby.pl', location_id: 1, responsible_person: 'Adam Nowak', category_id: 3 },
+    { id: 'C-MM-0003', name: 'Opaski zaciskowe czarne (szt)', quantity_stored: 45, min_quantity: 100, shop_link: 'https://tme.eu', location_id: 3, responsible_person: 'Katarzyna Zielińska', category_id: 3 },
   ];
 
   const mockShoppingList: DatabaseShoppingListItem[] = [
-    { id: 301, name: 'Szlifierka kątowa Bosch GWS 9-125', type: 'item', quantity: 1, shop_link: 'https://allegro.pl', price_estimate: 350, suggested_by: 'Jan Kowalski', status: 'pending' },
-    { id: 302, name: 'Cyna do lutowania 1mm Sn99Cu1 250g', type: 'consumable', quantity: 5, shop_link: 'https://tme.eu', price_estimate: 85, suggested_by: 'Adam Nowak', status: 'ordered' },
-    { id: 303, name: 'Zasilacz laboratoryjny Wanptek 30V 10A', type: 'item', quantity: 2, shop_link: null, price_estimate: 580, suggested_by: 'Marta Wiśniewska', status: 'received' },
+    { id: 301, name: 'Szlifierka kątowa Bosch GWS 9-125', type: 'item', quantity: 1, shop_link: 'https://allegro.pl', price_estimate: 350, suggested_by: 'Jan Kowalski', status: 'pending', category_id: 2 },
+    { id: 302, name: 'Cyna do lutowania 1mm Sn99Cu1 250g', type: 'consumable', quantity: 5, shop_link: 'https://tme.eu', price_estimate: 85, suggested_by: 'Adam Nowak', status: 'ordered', category_id: 1 },
+    { id: 303, name: 'Zasilacz laboratoryjny Wanptek 30V 10A', type: 'item', quantity: 2, shop_link: null, price_estimate: 580, suggested_by: 'Marta Wiśniewska', status: 'received', category_id: 1 },
   ];
 
   const mockLocations: DatabaseLocation[] = [
     { id: 1, name: 'Szafa A - Narzędzia i Elektronika', type: 'permanent', event_id: null, room: 'Warsztat 101', responsible_person: 'Jan Kowalski' },
     { id: 2, name: 'Szafa B - Pneumatyka i Mechanika', type: 'permanent', event_id: null, room: 'Warsztat 101', responsible_person: 'Adam Nowak' },
     { id: 3, name: 'Regał C - Chemia i Drobiazgi', type: 'permanent', event_id: null, room: 'Korytarz', responsible_person: 'Katarzyna Zielińska' },
+  ];
+
+  const mockCategories: DatabaseCategory[] = [
+    { id: 1, name: 'Elektronika', code: 'EL' },
+    { id: 2, name: 'Narzędzia ręczne', code: 'NR' },
+    { id: 3, name: 'Materiały montażowe', code: 'MM' },
+    { id: 4, name: 'Pneumatyka', code: 'PN' }
   ];
 
   const fetchData = async () => {
@@ -93,8 +113,9 @@ export default function ZakupyPage() {
       const resCons = await supabase.from('consumables').select('*');
       const resShopping = await supabase.from('shopping_list').select('*').order('id', { ascending: false });
       const resLocs = await supabase.from('locations').select('*').eq('type', 'permanent');
+      const resCats = await supabase.from('categories').select('*').order('name');
 
-      if (resCons.error || resShopping.error || resLocs.error) {
+      if (resCons.error || resShopping.error || resLocs.error || resCats.error) {
         throw new Error('Supabase request failed');
       }
 
@@ -111,6 +132,9 @@ export default function ZakupyPage() {
       if (resLocs.data) {
         setLocations(resLocs.data);
       }
+      if (resCats.data) {
+        setCategories(resCats.data);
+      }
       setIsDemoMode(false);
     } catch (err) {
       console.warn('Supabase error on loading shopping data, fallback to mock:', err);
@@ -119,6 +143,7 @@ export default function ZakupyPage() {
       setShoppingList(mockShoppingList);
       setLocations(mockLocations);
       setAllConsumables(mockConsumables);
+      setCategories(mockCategories);
     } finally {
       setLoading(false);
     }
@@ -191,6 +216,7 @@ export default function ZakupyPage() {
     setNewReqShopLink('');
     setNewReqPrice('');
     setNewReqSuggestedBy('');
+    setNewReqCategoryId('');
     setIsNewRequestModalOpen(true);
   };
 
@@ -214,6 +240,7 @@ export default function ZakupyPage() {
     }
 
     setNewReqSubmitting(true);
+    const parsedCategoryId = parseInt(newReqCategoryId) || null;
 
     const payload = {
       name: newReqName.trim(),
@@ -222,7 +249,8 @@ export default function ZakupyPage() {
       shop_link: newReqShopLink.trim() || null,
       price_estimate: price,
       suggested_by: newReqSuggestedBy.trim() || null,
-      status: 'pending' as const
+      status: 'pending' as const,
+      category_id: parsedCategoryId
     };
 
     if (isDemoMode) {
@@ -301,6 +329,100 @@ export default function ZakupyPage() {
     }
   };
 
+  // --- SKU Suggestion Logic ---
+  const suggestNextSku = async (type: 'I' | 'C', categoryId: number | null): Promise<string> => {
+    if (!categoryId) return '';
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat || !cat.code) return '';
+    const code = cat.code.toUpperCase();
+    const prefix = `${type}-${code}-`;
+
+    if (isDemoMode) {
+      let highestNum = 0;
+      if (type === 'I') {
+        const mockItemsForIdGen = [
+          { id: 'I-NR-0001', name: 'Dremel 4000', location_id: 1, responsible_person: 'Bernie', shop_link: 'https://dremel.pl', status: 'in_workshop', category_id: 2 },
+          { id: 'I-NR-0002', name: 'Wkrętarka Makita 18V', location_id: 2, responsible_person: 'Jan Nowak', shop_link: 'https://makita.pl', status: 'assigned_to_event', category_id: 2 },
+          { id: 'I-EL-0001', name: 'Lutownica TS101', location_id: 2, responsible_person: 'Kamil', shop_link: 'https://gotronik.pl', status: 'packed', category_id: 1 },
+          { id: 'I-NR-0003', name: 'Zestaw kluczy płaskich', location_id: 3, responsible_person: 'Adam Kowalski', shop_link: 'https://sklep.pl', status: 'in_workshop', category_id: 2 },
+        ];
+        mockItemsForIdGen.forEach(item => {
+          if (item.id && item.id.toUpperCase().startsWith(prefix)) {
+            const parts = item.id.split('-');
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart, 10);
+            if (!isNaN(num) && num > highestNum) {
+              highestNum = num;
+            }
+          }
+        });
+      } else {
+        allConsumables.forEach(c => {
+          if (c.id && c.id.toUpperCase().startsWith(prefix)) {
+            const parts = c.id.split('-');
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart, 10);
+            if (!isNaN(num) && num > highestNum) {
+              highestNum = num;
+            }
+          }
+        });
+      }
+      const nextNum = highestNum + 1;
+      const paddedNum = nextNum.toString().padStart(4, '0');
+      return `${prefix}${paddedNum}`;
+    } else {
+      const table = type === 'I' ? 'items' : 'consumables';
+      const { data, error } = await supabase
+        .from(table)
+        .select('id')
+        .like('id', `${prefix}%`)
+        .order('id', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching highest ID:', error);
+        return `${prefix}0001`;
+      }
+
+      if (data && data.length > 0) {
+        const lastId = data[0].id;
+        const parts = lastId.split('-');
+        const lastPart = parts[parts.length - 1];
+        const num = parseInt(lastPart, 10);
+        if (!isNaN(num)) {
+          const nextNum = num + 1;
+          const paddedNum = nextNum.toString().padStart(4, '0');
+          return `${prefix}${paddedNum}`;
+        }
+      }
+      return `${prefix}0001`;
+    }
+  };
+
+  const handleReceiveCategoryChange = async (catIdStr: string) => {
+    setReceiveCategoryId(catIdStr);
+    if (selectedReceiveItem && catIdStr) {
+      const catId = parseInt(catIdStr, 10);
+      if (!isNaN(catId)) {
+        const typeChar = selectedReceiveItem.type === 'item' ? 'I' : 'C';
+        const suggested = await suggestNextSku(typeChar, catId);
+        setReceiveIdInput(suggested);
+      }
+    }
+  };
+
+  const handleReceiveModeChange = async (mode: 'new' | 'existing') => {
+    setReceiveMode(mode);
+    if (mode === 'new' && receiveCategoryId && selectedReceiveItem) {
+      const catId = parseInt(receiveCategoryId, 10);
+      if (!isNaN(catId)) {
+        const suggested = await suggestNextSku('C', catId);
+        setReceiveIdInput(suggested);
+      }
+    }
+  };
+
   // --- RECEIVE INTO WAREHOUSE HANDLERS ---
   const openReceiveModal = (item: DatabaseShoppingListItem) => {
     setSelectedReceiveItem(item);
@@ -308,6 +430,7 @@ export default function ZakupyPage() {
     setReceiveItemLink(item.shop_link || '');
     setReceiveMode('existing');
     setReceiveExistingConsId('');
+    setReceiveIdInput('');
     
     // Default location configuration
     const defaultLoc = locations.length > 0 ? locations[0] : null;
@@ -315,6 +438,15 @@ export default function ZakupyPage() {
     setReceiveResponsiblePerson(defaultLoc && defaultLoc.responsible_person ? defaultLoc.responsible_person : '');
     
     setReceiveMinQty((item.quantity * 2).toString());
+    setReceiveCategoryId(item.category_id ? item.category_id.toString() : '');
+
+    // Pre-fill SKU if category exists
+    if (item.category_id) {
+      suggestNextSku(item.type === 'item' ? 'I' : 'C', item.category_id).then(sku => {
+        setReceiveIdInput(sku);
+      });
+    }
+
     setIsReceiveModalOpen(true);
   };
 
@@ -338,10 +470,23 @@ export default function ZakupyPage() {
     }
 
     setReceiveSubmitting(true);
+    
+    // Walidacja formatu ID (SKU) dla nowych zasobów
+    const skuRegex = /^(I|C)-[A-Z]{2,3}-\d{4}$/;
+    if (selectedReceiveItem.type === 'item' || receiveMode === 'new') {
+      if (!skuRegex.test(receiveIdInput.trim())) {
+        const typeChar = selectedReceiveItem.type === 'item' ? 'I' : 'C';
+        alert(`Błędny format ID! Wymagany format: ${typeChar}-KOD-XXXX (np. ${typeChar}-EL-0001)`);
+        setReceiveSubmitting(false);
+        return;
+      }
+    }
+
+    const parsedCategoryId = parseInt(receiveCategoryId) || null;
 
     try {
       if (selectedReceiveItem.type === 'item') {
-        // DURA BLE ITEM RECEIPT
+        // DURABLE ITEM RECEIPT
         const locId = parseInt(receiveLocationId);
         if (isNaN(locId)) {
           alert('Wybierz szafę/lokalizację docelową.');
@@ -349,18 +494,30 @@ export default function ZakupyPage() {
           return;
         }
 
+        const parts = receiveIdInput.trim().split('-');
+        const lastPart = parts[parts.length - 1];
+        const startNum = parseInt(lastPart, 10);
+        const prefix = parts.slice(0, -1).join('-');
+
         if (isDemoMode) {
           // Add to mock durables conceptually or just output success
           setShoppingList(prev => prev.filter(i => i.id !== selectedReceiveItem.id));
         } else {
-          // Loop to insert the number of copies ordered
-          const inserts = Array.from({ length: selectedReceiveItem.quantity }).map(() => ({
-            name: receiveItemName.trim(),
-            location_id: locId,
-            responsible_person: receiveResponsiblePerson.trim(),
-            shop_link: receiveItemLink.trim(),
-            status: 'in_workshop' as const
-          }));
+          // Loop to insert the number of copies ordered with sequential SKU IDs
+          const inserts = Array.from({ length: selectedReceiveItem.quantity }).map((_, idx) => {
+            const nextNum = startNum + idx;
+            const paddedNum = nextNum.toString().padStart(4, '0');
+            const copySku = `${prefix}-${paddedNum}`;
+            return {
+              id: copySku,
+              name: receiveItemName.trim(),
+              location_id: locId,
+              responsible_person: receiveResponsiblePerson.trim(),
+              shop_link: receiveItemLink.trim(),
+              status: 'in_workshop' as const,
+              category_id: parsedCategoryId
+            };
+          });
 
           const { error: insertErr } = await supabase
             .from('items')
@@ -378,8 +535,8 @@ export default function ZakupyPage() {
       } else {
         // CONSUMABLE RECEIPT
         if (receiveMode === 'existing') {
-          const consId = parseInt(receiveExistingConsId);
-          if (isNaN(consId)) {
+          const consId = receiveExistingConsId;
+          if (!consId) {
             alert('Wybierz materiał zużywalny do aktualizacji stanu.');
             setReceiveSubmitting(false);
             return;
@@ -427,14 +584,20 @@ export default function ZakupyPage() {
           }
 
           if (isDemoMode) {
+            if (allConsumables.some(c => c.id.toUpperCase() === receiveIdInput.trim().toUpperCase())) {
+              alert('Materiał o tym ID już istnieje!');
+              setReceiveSubmitting(false);
+              return;
+            }
             const newMockCons: DatabaseConsumable = {
-              id: Date.now(),
+              id: receiveIdInput.trim(),
               name: receiveItemName.trim(),
               quantity_stored: selectedReceiveItem.quantity,
               min_quantity: minQty,
               shop_link: receiveItemLink.trim(),
               location_id: locId,
-              responsible_person: receiveResponsiblePerson.trim() || null
+              responsible_person: receiveResponsiblePerson.trim() || null,
+              category_id: parsedCategoryId
             };
             setAllConsumables(prev => [...prev, newMockCons]);
             setShoppingList(prev => prev.filter(i => i.id !== selectedReceiveItem.id));
@@ -442,12 +605,14 @@ export default function ZakupyPage() {
             const { error: insertErr } = await supabase
               .from('consumables')
               .insert({
+                id: receiveIdInput.trim(),
                 name: receiveItemName.trim(),
                 quantity_stored: selectedReceiveItem.quantity,
                 min_quantity: minQty,
                 shop_link: receiveItemLink.trim(),
                 location_id: locId,
-                responsible_person: receiveResponsiblePerson.trim() || null
+                responsible_person: receiveResponsiblePerson.trim() || null,
+                category_id: parsedCategoryId
               });
 
             if (insertErr) throw insertErr;
@@ -480,6 +645,30 @@ export default function ZakupyPage() {
       (item.suggested_by && item.suggested_by.toLowerCase().includes(searchQuery.toLowerCase()));
     return statusMatches && searchMatches;
   });
+
+  const renderCategoryBadge = (categoryId: number | null | undefined) => {
+    if (!categoryId) return null;
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return null;
+
+    const colorClasses = [
+      'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20',
+      'bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20',
+      'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20',
+      'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20',
+      'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20',
+      'bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500/20',
+      'bg-violet-500/10 text-violet-400 border-violet-500/20 hover:bg-violet-500/20',
+      'bg-pink-500/10 text-pink-400 border-pink-500/20 hover:bg-pink-500/20',
+    ];
+    const colorClass = colorClasses[cat.id % colorClasses.length];
+
+    return (
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-all duration-200 cursor-default select-none ${colorClass}`}>
+        {cat.name}
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
@@ -579,7 +768,12 @@ export default function ZakupyPage() {
                     return (
                       <tr key={`alert-${item.id}`} className="hover:bg-zinc-900/20 transition-colors">
                         <td className="py-3 px-6 font-mono text-xs text-zinc-500">#C{item.id}</td>
-                        <td className="py-3 px-6 font-semibold text-zinc-100">{item.name}</td>
+                        <td className="py-3 px-6 font-semibold text-zinc-100">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{item.name}</span>
+                            {renderCategoryBadge(item.category_id)}
+                          </div>
+                        </td>
                         <td className="py-3 px-6 text-center font-mono text-rose-400 font-bold bg-rose-500/[0.02]">
                           {item.quantity_stored}
                         </td>
@@ -729,7 +923,10 @@ export default function ZakupyPage() {
                         <td className="py-4 px-6 font-mono text-xs text-zinc-500">#{item.id}</td>
                         <td className="py-4 px-6">
                           <div className="flex flex-col gap-1">
-                            <span className="font-semibold text-zinc-100">{item.name}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-zinc-100">{item.name}</span>
+                              {renderCategoryBadge(item.category_id)}
+                            </div>
                             {item.shop_link && (
                               <a
                                 href={item.shop_link}
@@ -836,32 +1033,49 @@ export default function ZakupyPage() {
       {/* MODAL 1: RESTOCK CONUSMABLE ALERT */}
       {isRestockModalOpen && selectedRestockItem && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-md shadow-2xl p-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-white mb-2">Dostawa materiału</h3>
-            <p className="text-zinc-400 text-sm mb-4">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-xl shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-zinc-850 pb-4 mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Boxes className="h-5 w-5 text-blue-400" />
+                Dostawa materiału
+              </h3>
+              <button 
+                onClick={() => setIsRestockModalOpen(false)}
+                className="text-zinc-450 hover:text-white transition-colors active:scale-95 duration-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <p className="text-zinc-400 text-sm mb-5 leading-relaxed">
               Uzupełniasz stan magazynowy dla: <span className="font-semibold text-zinc-200">{selectedRestockItem.name}</span>.
             </p>
 
-            <form onSubmit={handleRestockSubmit} className="space-y-4">
+            <form onSubmit={handleRestockSubmit} className="space-y-5">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">
                   Dostarczona ilość (szt.)
                 </label>
-                <input
-                  type="number"
-                  required
-                  value={restockQtyToAdd}
-                  onChange={(e) => setRestockQtyToAdd(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 font-mono"
-                  placeholder="np. 50"
-                  min="1"
-                />
-                <span className="block text-[11px] text-zinc-555">
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                    <Plus className="w-5 h-5 block shrink-0" />
+                  </span>
+                  <input
+                    type="number"
+                    required
+                    value={restockQtyToAdd}
+                    onChange={(e) => setRestockQtyToAdd(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 font-mono text-sm"
+                    placeholder="np. 50"
+                    min="1"
+                  />
+                </div>
+                <span className="block text-[11px] text-zinc-550">
                   Domyślnie sugerujemy brakującą ilość do stanu minimalnego (obecnie: {selectedRestockItem.quantity_stored} / {selectedRestockItem.min_quantity}).
                 </span>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-900">
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-900">
                 <button
                   type="button"
                   onClick={() => setIsRestockModalOpen(false)}
@@ -872,7 +1086,7 @@ export default function ZakupyPage() {
                 <button
                   type="submit"
                   disabled={restockSubmitting}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-black bg-blue-500 hover:bg-blue-400 rounded-lg active:scale-95 transition-all duration-150 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-black bg-blue-500 hover:bg-blue-400 rounded-lg active:scale-95 transition-all duration-150 disabled:opacity-50"
                 >
                   {restockSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Zapisz dostawę
@@ -886,95 +1100,150 @@ export default function ZakupyPage() {
       {/* MODAL 2: NEW PURCHASE REQUEST */}
       {isNewRequestModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-white mb-1">Nowy wniosek zakupowy</h3>
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-xl shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-zinc-855 pb-4 mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-blue-400" />
+                Nowy wniosek zakupowy
+              </h3>
+              <button 
+                onClick={() => setIsNewRequestModalOpen(false)}
+                className="text-zinc-450 hover:text-white transition-colors active:scale-95 duration-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
             <p className="text-zinc-400 text-xs mb-5">Dodaj pozycję do uniwersalnej listy zakupowej koła naukowego.</p>
 
-            <form onSubmit={handleNewRequestSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleNewRequestSubmit} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Nazwa pozycji</label>
-                  <input
-                    type="text"
-                    required
-                    value={newReqName}
-                    onChange={(e) => setNewReqName(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                    placeholder="np. Cyna z kalofonią, Wiertarka akumulatorowa Makita"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <Package className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      value={newReqName}
+                      onChange={(e) => setNewReqName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-205 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                      placeholder="np. Cyna z kalofonią, Wiertarka akumulatorowa Makita"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Typ zasobu</label>
-                  <select
-                    value={newReqType}
-                    onChange={(e) => setNewReqType(e.target.value as 'item' | 'consumable')}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                  >
-                    <option value="consumable">Zużywalne (śruby, taśmy, frezy)</option>
-                    <option value="item">Sprzęt trwały (narzędzia, mierniki)</option>
-                  </select>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-400 pointer-events-none">
+                      <Settings className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <select
+                      value={newReqType}
+                      onChange={(e) => setNewReqType(e.target.value as 'item' | 'consumable')}
+                      className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm appearance-none bg-none"
+                    >
+                      <option value="consumable" className="bg-zinc-950 text-zinc-250">Zużywalne (śruby, taśmy, frezy)</option>
+                      <option value="item" className="bg-zinc-950 text-zinc-250">Sprzęt trwały (narzędzia, mierniki)</option>
+                    </select>
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <SearchableSelect
+                    options={categories}
+                    value={newReqCategoryId}
+                    onChange={setNewReqCategoryId}
+                    label="Kategoria"
+                    placeholder="Wyszukaj kategorię..."
+                    searchLabel="Filtrowanie kategorii..."
+                    icon={Tag}
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Ilość sztuk</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={newReqQty}
-                    onChange={(e) => setNewReqQty(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <Boxes className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={newReqQty}
+                      onChange={(e) => setNewReqQty(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Szacowany koszt (zł)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newReqPrice}
-                    onChange={(e) => setNewReqPrice(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                    placeholder="np. 350 (opcjonalne)"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <ShoppingCart className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newReqPrice}
+                      onChange={(e) => setNewReqPrice(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                      placeholder="np. 350 (opcjonalne)"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 md:col-span-2">
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Osoba zgłaszająca</label>
-                  <input
-                    type="text"
-                    value={newReqSuggestedBy}
-                    onChange={(e) => setNewReqSuggestedBy(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                    placeholder="np. Jan Kowalski (opcjonalne)"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <User className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="text"
+                      value={newReqSuggestedBy}
+                      onChange={(e) => setNewReqSuggestedBy(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                      placeholder="np. Jan Kowalski (opcjonalne)"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Link do sklepu</label>
-                  <input
-                    type="url"
-                    value={newReqShopLink}
-                    onChange={(e) => setNewReqShopLink(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                    placeholder="https://allegro.pl/... (opcjonalne)"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <ExternalLink className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="url"
+                      value={newReqShopLink}
+                      onChange={(e) => setNewReqShopLink(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                      placeholder="https://allegro.pl/... (opcjonalne)"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-zinc-900">
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-900">
                 <button
                   type="button"
                   onClick={() => setIsNewRequestModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-zinc-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-sm font-semibold text-zinc-450 hover:text-white transition-colors"
                 >
                   Anuluj
                 </button>
                 <button
                   type="submit"
                   disabled={newReqSubmitting}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-black bg-blue-500 hover:bg-blue-400 rounded-lg active:scale-95 transition-all duration-150 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-black bg-blue-500 hover:bg-blue-400 rounded-lg active:scale-95 transition-all duration-150 disabled:opacity-50"
                 >
                   {newReqSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Dodaj wniosek
@@ -988,29 +1257,63 @@ export default function ZakupyPage() {
       {/* MODAL 3: RECEIVE PURCHASED RESOURCE INTO WAREHOUSE */}
       {isReceiveModalOpen && selectedReceiveItem && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-2.5 mb-1.5">
-              <PackageOpen className="h-5 w-5 text-blue-400" />
-              <h3 className="text-xl font-bold text-white">Przyjęcie do magazynu</h3>
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-xl shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-zinc-855 pb-4 mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <PackageOpen className="h-5 w-5 text-blue-400" />
+                Przyjęcie do magazynu
+              </h3>
+              <button 
+                onClick={() => setIsReceiveModalOpen(false)}
+                className="text-zinc-450 hover:text-white transition-colors active:scale-95 duration-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
+            
             <p className="text-zinc-400 text-xs mb-5">
               Definiujesz położenie zakupionej pozycji: <span className="font-semibold text-zinc-200">{selectedReceiveItem.name}</span> ({selectedReceiveItem.quantity} szt.)
             </p>
 
-            <form onSubmit={handleReceiveSubmit} className="space-y-4">
+            <form onSubmit={handleReceiveSubmit} className="space-y-5">
               
               {/* Type = durable Item Form */}
               {selectedReceiveItem.type === 'item' ? (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Nazwa w bazie</label>
-                    <input
-                      type="text"
-                      required
-                      value={receiveItemName}
-                      onChange={(e) => setReceiveItemName(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                        <Package className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        value={receiveItemName}
+                        onChange={(e) => setReceiveItemName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide flex justify-between items-center">
+                      <span>ID przedmiotu (kod QR / SKU)</span>
+                      <span className="text-[10px] text-zinc-550 font-normal lowercase font-sans">format: I-KOD-0000</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-550 pointer-events-none">
+                        <QrCode className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Wpisz lub wygeneruj ID..."
+                        value={receiveIdInput}
+                        onChange={(e) => setReceiveIdInput(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1020,47 +1323,70 @@ export default function ZakupyPage() {
                       options={locations}
                       value={receiveLocationId}
                       onChange={handleLocationChange}
+                      icon={Boxes}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <SearchableSelect
+                      options={categories}
+                      value={receiveCategoryId}
+                      onChange={handleReceiveCategoryChange}
+                      label="Kategoria"
+                      placeholder="Wyszukaj kategorię..."
+                      searchLabel="Filtrowanie kategorii..."
+                      icon={Tag}
                     />
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Opiekun / Osoba odpowiedzialna</label>
-                    <input
-                      type="text"
-                      value={receiveResponsiblePerson}
-                      onChange={(e) => setReceiveResponsiblePerson(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                      placeholder="np. Jan Kowalski"
-                    />
-                    <span className="block text-[10px] text-zinc-550">
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                        <User className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="text"
+                        value={receiveResponsiblePerson}
+                        onChange={(e) => setReceiveResponsiblePerson(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                        placeholder="np. Jan Kowalski"
+                      />
+                    </div>
+                    <span className="block text-[10px] text-zinc-500">
                       Wartość domyślnie pobierana jest z właściciela/opiekuna wybranej szafy.
                     </span>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Link do sklepu / instrukcji</label>
-                    <input
-                      type="url"
-                      value={receiveItemLink}
-                      onChange={(e) => setReceiveItemLink(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                        <ExternalLink className="w-5 h-5 block shrink-0" />
+                      </span>
+                      <input
+                        type="url"
+                        value={receiveItemLink}
+                        onChange={(e) => setReceiveItemLink(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-205 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                      />
+                    </div>
                   </div>
 
-                  <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3.5 text-xs text-purple-400">
-                    Oznaczenie tego sprzętu jako przyjęty spowoduje utworzenie <span className="font-bold font-mono">{selectedReceiveItem.quantity} osobnych kopii</span> w bazie sprzętu o statusie <span className="font-bold italic">w warsztacie</span>.
+                  <div className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-3.5 text-xs text-blue-400">
+                    Oznaczenie tego sprzętu jako przyjęty spowoduje utworzenie <span className="font-bold font-mono">{selectedReceiveItem.quantity} osobnych kopii</span> w bazie sprzętu o statusie <span className="font-bold italic text-blue-300">w warsztacie</span>.
                   </div>
                 </div>
               ) : (
                 /* Type = consumable Form */
-                <div className="space-y-4">
-                  <div className="flex border border-zinc-850 p-1 rounded-xl bg-zinc-950 gap-1">
+                <div className="space-y-5">
+                  <div className="flex border border-zinc-800 p-1 rounded-xl bg-zinc-950 gap-1">
                     <button
                       type="button"
-                      onClick={() => setReceiveMode('existing')}
+                      onClick={() => handleReceiveModeChange('existing')}
                       className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                         receiveMode === 'existing'
-                          ? 'bg-zinc-900 text-blue-400 border border-zinc-800/80 shadow-md'
+                          ? 'bg-zinc-900 text-blue-400 border border-zinc-800 shadow-md'
                           : 'text-zinc-500 hover:text-zinc-300'
                       }`}
                     >
@@ -1068,10 +1394,10 @@ export default function ZakupyPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setReceiveMode('new')}
+                      onClick={() => handleReceiveModeChange('new')}
                       className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
                         receiveMode === 'new'
-                          ? 'bg-zinc-900 text-blue-400 border border-zinc-800/80 shadow-md'
+                          ? 'bg-zinc-900 text-blue-400 border border-zinc-800 shadow-md'
                           : 'text-zinc-500 hover:text-zinc-300'
                       }`}
                     >
@@ -1080,7 +1406,7 @@ export default function ZakupyPage() {
                   </div>
 
                   {receiveMode === 'existing' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div className="space-y-1.5">
                         <SearchableSelect
                           label="Wybierz istniejący materiał z bazy"
@@ -1092,45 +1418,81 @@ export default function ZakupyPage() {
                           }))}
                           value={receiveExistingConsId}
                           onChange={setReceiveExistingConsId}
+                          icon={Boxes}
                         />
                       </div>
-                      <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3.5 text-xs text-blue-400">
+                      <div className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-3.5 text-xs text-blue-400">
                         Zwiększysz stan magazynowy wybranego materiału o <span className="font-bold font-mono">+{selectedReceiveItem.quantity} szt.</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       <div className="space-y-1.5">
                         <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Nazwa materiału</label>
-                        <input
-                          type="text"
-                          required
-                          value={receiveItemName}
-                          onChange={(e) => setReceiveItemName(e.target.value)}
-                          className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                        />
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                            <Package className="w-5 h-5 block shrink-0" />
+                          </span>
+                          <input
+                            type="text"
+                            required
+                            value={receiveItemName}
+                            onChange={(e) => setReceiveItemName(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide flex justify-between items-center">
+                          <span>ID materiału (kod QR / SKU)</span>
+                          <span className="text-[10px] text-zinc-550 font-normal lowercase font-sans">format: C-KOD-0000</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-550 pointer-events-none">
+                            <QrCode className="w-5 h-5 block shrink-0" />
+                          </span>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Wpisz lub wygeneruj ID..."
+                            value={receiveIdInput}
+                            onChange={(e) => setReceiveIdInput(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                          />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Stan początkowy</label>
-                          <input
-                            type="text"
-                            disabled
-                            value={`${selectedReceiveItem.quantity} szt.`}
-                            className="w-full px-4 py-2.5 rounded-lg bg-zinc-900/50 border border-zinc-850 text-zinc-500 text-sm font-mono focus:outline-none"
-                          />
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-550 pointer-events-none">
+                              <Boxes className="w-5 h-5 block shrink-0" />
+                            </span>
+                            <input
+                              type="text"
+                              disabled
+                              value={`${selectedReceiveItem.quantity} szt.`}
+                              className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900/50 border border-zinc-800 text-zinc-550 text-sm font-mono focus:outline-none"
+                            />
+                          </div>
                         </div>
                         <div className="space-y-1.5">
                           <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Zalecane minimum (alert)</label>
-                          <input
-                            type="number"
-                            required
-                            min="0"
-                            value={receiveMinQty}
-                            onChange={(e) => setReceiveMinQty(e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                          />
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-550 pointer-events-none">
+                              <AlertCircle className="w-5 h-5 block shrink-0" />
+                            </span>
+                            <input
+                              type="number"
+                              required
+                              min="0"
+                              value={receiveMinQty}
+                              onChange={(e) => setReceiveMinQty(e.target.value)}
+                              className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -1141,18 +1503,36 @@ export default function ZakupyPage() {
                           options={locations}
                           value={receiveLocationId}
                           onChange={handleLocationChange}
+                          icon={Boxes}
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <SearchableSelect
+                          options={categories}
+                          value={receiveCategoryId}
+                          onChange={handleReceiveCategoryChange}
+                          label="Kategoria"
+                          placeholder="Wyszukaj kategorię..."
+                          searchLabel="Filtrowanie kategorii..."
+                          icon={Tag}
                         />
                       </div>
 
                       <div className="space-y-1.5">
                         <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Opiekun / Osoba odpowiedzialna</label>
-                        <input
-                          type="text"
-                          value={receiveResponsiblePerson}
-                          onChange={(e) => setReceiveResponsiblePerson(e.target.value)}
-                          className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                          placeholder="np. Jan Kowalski"
-                        />
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                            <User className="w-5 h-5 block shrink-0" />
+                          </span>
+                          <input
+                            type="text"
+                            value={receiveResponsiblePerson}
+                            onChange={(e) => setReceiveResponsiblePerson(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
+                            placeholder="np. Jan Kowalski"
+                          />
+                        </div>
                         <span className="block text-[10px] text-zinc-550">
                           Wartość domyślnie pobierana jest z właściciela/opiekuna wybranej szafy.
                         </span>
@@ -1160,19 +1540,24 @@ export default function ZakupyPage() {
 
                       <div className="space-y-1.5">
                         <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Link do sklepu</label>
-                        <input
-                          type="url"
-                          value={receiveItemLink}
-                          onChange={(e) => setReceiveItemLink(e.target.value)}
-                          className="w-full px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                        />
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                            <ExternalLink className="w-5 h-5 block shrink-0" />
+                          </span>
+                          <input
+                            type="url"
+                            value={receiveItemLink}
+                            onChange={(e) => setReceiveItemLink(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-zinc-900">
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-900">
                 <button
                   type="button"
                   onClick={() => setIsReceiveModalOpen(false)}
@@ -1183,7 +1568,7 @@ export default function ZakupyPage() {
                 <button
                   type="submit"
                   disabled={receiveSubmitting}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-black bg-blue-500 hover:bg-blue-400 rounded-lg transition-all active:scale-95 duration-150 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-black bg-blue-500 hover:bg-blue-400 rounded-lg transition-all active:scale-95 duration-150 disabled:opacity-50"
                 >
                   {receiveSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   Przyjmij do magazynu

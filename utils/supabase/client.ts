@@ -17,28 +17,36 @@ export interface DatabaseLocation {
   responsible_person: string | null;
 }
 
-export interface DatabaseItem {
+export interface DatabaseCategory {
   id: number;
+  name: string;
+  code: string;
+}
+
+export interface DatabaseItem {
+  id: string; // SKU code format (e.g. I-EL-0001)
   name: string;
   location_id: number;
   responsible_person: string;
   shop_link: string;
   status: 'in_workshop' | 'assigned_to_event' | 'packed';
+  category_id?: number | null;
 }
 
 export interface DatabaseConsumable {
-  id: number;
+  id: string; // SKU code format (e.g. C-NA-0002)
   name: string;
   quantity_stored: number;
   min_quantity: number;
   shop_link: string;
   location_id: number | null;
   responsible_person: string | null;
+  category_id?: number | null;
 }
 
 export interface DatabaseEventConsumable {
   id: number;
-  consumable_id: number;
+  consumable_id: string; // references DatabaseConsumable.id (SKU)
   location_id: number; // ID skrzyni
   quantity_packed: number;
   quantity_required: number;
@@ -54,11 +62,17 @@ export interface DatabaseShoppingListItem {
   price_estimate: number | null;
   suggested_by: string | null;
   status: 'pending' | 'ordered' | 'received';
+  category_id?: number | null;
 }
 
 export type Database = {
   public: {
     Tables: {
+      categories: {
+        Row: DatabaseCategory;
+        Insert: Omit<DatabaseCategory, 'id'>;
+        Update: Partial<DatabaseCategory>;
+      };
       events: {
         Row: DatabaseEvent;
         Insert: Omit<DatabaseEvent, 'id'>;

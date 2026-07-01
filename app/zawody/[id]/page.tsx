@@ -35,7 +35,7 @@ import {
 
 interface ExtendedConsumableItem {
   eventConsumableId: number;
-  consumableId: number;
+  consumableId: string;
   name: string;
   quantityPacked: number;
   quantityRequired: number;
@@ -167,25 +167,25 @@ export default function EventPackingPage() {
   ];
 
   const mockItems: DatabaseItem[] = [
-    { id: 101, name: 'Szlifierka kątowa Bosch', location_id: 1, responsible_person: 'Jan Nowak', shop_link: '', status: 'in_workshop' },
-    { id: 102, name: 'Wkrętarka Makita 18V', location_id: 301, responsible_person: 'Jan Nowak', shop_link: '', status: 'assigned_to_event' },
-    { id: 103, name: 'Lutownica TS101', location_id: 302, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'packed' },
-    { id: 104, name: 'Dremel 4000', location_id: 1, responsible_person: 'Adam Kowalski', shop_link: '', status: 'in_workshop' },
-    { id: 105, name: 'Zestaw kluczy płaskich', location_id: 301, responsible_person: 'Adam Kowalski', shop_link: '', status: 'assigned_to_event' },
-    { id: 106, name: 'Oscyloskop Siglent', location_id: 302, responsible_person: 'Michał Zieliński', shop_link: '', status: 'packed' },
-    { id: 107, name: 'Zasilacz laboratoryjny Korad', location_id: 2, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'in_workshop' }
+    { id: 'I-NR-0101', name: 'Szlifierka kątowa Bosch', location_id: 1, responsible_person: 'Jan Nowak', shop_link: '', status: 'in_workshop' },
+    { id: 'I-NR-0102', name: 'Wkrętarka Makita 18V', location_id: 301, responsible_person: 'Jan Nowak', shop_link: '', status: 'assigned_to_event' },
+    { id: 'I-EL-0103', name: 'Lutownica TS101', location_id: 302, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'packed' },
+    { id: 'I-NR-0104', name: 'Dremel 4000', location_id: 1, responsible_person: 'Adam Kowalski', shop_link: '', status: 'in_workshop' },
+    { id: 'I-NR-0105', name: 'Zestaw kluczy płaskich', location_id: 301, responsible_person: 'Adam Kowalski', shop_link: '', status: 'assigned_to_event' },
+    { id: 'I-EL-0106', name: 'Oscyloskop Siglent', location_id: 302, responsible_person: 'Michał Zieliński', shop_link: '', status: 'packed' },
+    { id: 'I-EL-0107', name: 'Zasilacz laboratoryjny Korad', location_id: 2, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'in_workshop' }
   ];
 
   const mockEventConsumables: ExtendedConsumableItem[] = [
-    { eventConsumableId: 501, consumableId: 201, name: 'Frezy węglikowe 2mm', quantityPacked: 2, quantityRequired: 5, locationId: 301 },
-    { eventConsumableId: 502, consumableId: 202, name: 'Cyna bezołowiowa Sn99', quantityPacked: 8, quantityRequired: 8, locationId: 302 },
-    { eventConsumableId: 503, consumableId: 203, name: 'Śruby M3x10 imbusowe (szt)', quantityPacked: 50, quantityRequired: 150, locationId: 301 }
+    { eventConsumableId: 501, consumableId: 'C-MM-0201', name: 'Frezy węglikowe 2mm', quantityPacked: 2, quantityRequired: 5, locationId: 301 },
+    { eventConsumableId: 502, consumableId: 'C-EL-0202', name: 'Cyna bezołowiowa Sn99', quantityPacked: 8, quantityRequired: 8, locationId: 302 },
+    { eventConsumableId: 503, consumableId: 'C-MM-0203', name: 'Śruby M3x10 imbusowe (szt)', quantityPacked: 50, quantityRequired: 150, locationId: 301 }
   ];
 
   const mockConsumables: DatabaseConsumable[] = [
-    { id: 201, name: 'Frezy węglikowe 2mm', quantity_stored: 12, min_quantity: 10, shop_link: '', location_id: 1, responsible_person: null },
-    { id: 202, name: 'Cyna bezołowiowa Sn99', quantity_stored: 4, min_quantity: 5, shop_link: '', location_id: 2, responsible_person: null },
-    { id: 203, name: 'Śruby M3x10 imbusowe (szt)', quantity_stored: 340, min_quantity: 200, shop_link: '', location_id: 1, responsible_person: null }
+    { id: 'C-MM-0201', name: 'Frezy węglikowe 2mm', quantity_stored: 12, min_quantity: 10, shop_link: '', location_id: 1, responsible_person: null },
+    { id: 'C-EL-0202', name: 'Cyna bezołowiowa Sn99', quantity_stored: 4, min_quantity: 5, shop_link: '', location_id: 2, responsible_person: null },
+    { id: 'C-MM-0203', name: 'Śruby M3x10 imbusowe (szt)', quantity_stored: 340, min_quantity: 200, shop_link: '', location_id: 1, responsible_person: null }
   ];
 
   const mockPermanentLocations: DatabaseLocation[] = [
@@ -531,7 +531,7 @@ export default function EventPackingPage() {
     setIsItemEditModalOpen(true);
   };
 
-  const handlePackItem = async (itemId: number) => {
+  const handlePackItem = async (itemId: string) => {
     const originalItems = [...items];
     
     // Optimistic Update
@@ -560,7 +560,7 @@ export default function EventPackingPage() {
     }
   };
 
-  const handleUnpackItem = async (itemId: number) => {
+  const handleUnpackItem = async (itemId: string) => {
     const originalItems = [...items];
 
     // Optimistic Update
@@ -589,7 +589,7 @@ export default function EventPackingPage() {
     }
   };
 
-  const handleReturnToWorkshop = async (itemId: number) => {
+  const handleReturnToWorkshop = async (itemId: string) => {
     const defaultLocId = permanentLocations.length > 0 ? permanentLocations[0].id : 1;
     
     if (isDemoMode) {
@@ -625,7 +625,7 @@ export default function EventPackingPage() {
     }
   };
 
-  const handleAssignItem = async (itemId: number, boxId: number) => {
+  const handleAssignItem = async (itemId: string, boxId: number) => {
     // Look up default responsible person from the target box if any
     const targetBox = boxes.find(b => b.id === boxId);
     const responsible = targetBox?.responsible_person || '';
@@ -733,7 +733,7 @@ export default function EventPackingPage() {
   };
 
   // --- Consumables Quick Increments & Decrements ---
-  const handleAdjustConsumable = async (eventConsumableId: number, consumableId: number, delta: number) => {
+  const handleAdjustConsumable = async (eventConsumableId: number, consumableId: string, delta: number) => {
     const ecItem = consumablesListRef.current.find(ec => ec.eventConsumableId === eventConsumableId);
     if (!ecItem) return;
 
@@ -817,7 +817,7 @@ export default function EventPackingPage() {
     e.preventDefault();
     if (!reqConsumableId || !reqBoxId) return;
 
-    const parsedConsId = parseInt(reqConsumableId);
+    const parsedConsId = reqConsumableId;
     const parsedBoxId = parseInt(reqBoxId);
     const reqQty = parseInt(reqQtyVal) || 0;
 
@@ -890,40 +890,24 @@ export default function EventPackingPage() {
     const rawInput = scanInput.trim();
     if (!rawInput) return;
 
-    // Check for prefixes: I / C
-    const itemMatch = rawInput.match(/^[iI](\d+)$/);
-    const consMatch = rawInput.match(/^[cC](\d+)$/);
-
-    let searchType: 'item' | 'consumable' | 'any' = 'any';
-    let id: number;
-
-    if (itemMatch) {
-      searchType = 'item';
-      id = parseInt(itemMatch[1]);
-    } else if (consMatch) {
-      searchType = 'consumable';
-      id = parseInt(consMatch[1]);
-    } else {
-      id = parseInt(rawInput);
-      if (isNaN(id)) {
-        setScanError('Wpisz poprawne ID (np. 102) lub użyj prefixu (np. I102 dla sprzętu, C102 dla materiału).');
-        return;
-      }
+    // Sprawdzamy pierwszą literę identyfikatora (SKU)
+    const firstChar = rawInput[0]?.toUpperCase();
+    if (firstChar !== 'I' && firstChar !== 'C') {
+      setScanError('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
+      return;
     }
 
+    const searchType = firstChar === 'I' ? 'item' : 'consumable';
+    const skuCode = rawInput.toUpperCase();
+
     if (isDemoMode) {
-      const scannedItemVal = (searchType === 'any' || searchType === 'item') 
-        ? mockItems.find(i => i.id === id) 
+      const scannedItemVal = searchType === 'item'
+        ? mockItems.find(i => i.id.toUpperCase() === skuCode)
         : null;
 
-      const scannedConsVal = (searchType === 'any' || searchType === 'consumable') 
-        ? mockConsumables.find(c => c.id === id) 
+      const scannedConsVal = searchType === 'consumable'
+        ? mockConsumables.find(c => c.id.toUpperCase() === skuCode)
         : null;
-
-      if (searchType === 'any' && scannedItemVal && scannedConsVal) {
-        setScanError(`Kolizja ID: znaleziono sprzęt i materiał o ID ${id}. Wpisz I${id} dla sprzętu lub C${id} dla materiału.`);
-        return;
-      }
 
       if (scannedItemVal) {
         setScannedItem(scannedItemVal);
@@ -933,7 +917,7 @@ export default function EventPackingPage() {
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId === id && c.locationId === targetBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === skuCode && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
@@ -953,27 +937,20 @@ export default function EventPackingPage() {
       let scannedItemVal = null;
       let scannedConsVal = null;
 
-      if (searchType === 'any' || searchType === 'item') {
+      if (searchType === 'item') {
         const { data: itemData } = await supabase
           .from('items')
           .select('*')
-          .eq('id', id)
+          .eq('id', skuCode)
           .maybeSingle();
         scannedItemVal = itemData;
-      }
-
-      if (searchType === 'any' || searchType === 'consumable') {
+      } else {
         const { data: consData } = await supabase
           .from('consumables')
           .select('*')
-          .eq('id', id)
+          .eq('id', skuCode)
           .maybeSingle();
         scannedConsVal = consData;
-      }
-
-      if (searchType === 'any' && scannedItemVal && scannedConsVal) {
-        setScanError(`Kolizja ID: znaleziono sprzęt i materiał o ID ${id}. Wpisz I${id} dla sprzętu lub C${id} dla materiału.`);
-        return;
       }
 
       if (scannedItemVal) {
@@ -984,7 +961,7 @@ export default function EventPackingPage() {
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId === id && c.locationId === targetBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === skuCode && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
@@ -2086,7 +2063,7 @@ export default function EventPackingPage() {
             <form 
               onSubmit={(e) => {
                 e.preventDefault();
-                const itemId = parseInt(assignItemId);
+                const itemId = assignItemId;
                 const boxId = parseInt(assignBoxId);
                 if (itemId && boxId) {
                   handleAssignItem(itemId, boxId);
