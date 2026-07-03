@@ -9,8 +9,17 @@ import {
   DatabaseLocation, 
   DatabaseItem, 
   DatabaseConsumable, 
-  DatabaseEventConsumable 
+  DatabaseEventConsumable,
+  DatabaseCategory
 } from '@/utils/supabase/client';
+import ItemEditModal from '@/app/components/ItemEditModal';
+
+interface ItemWithLocation extends DatabaseItem {
+  locations?: {
+    type: 'permanent' | 'event_box';
+    event_id: number | null;
+  } | null;
+}
 import { 
   Trophy, 
   Calendar, 
@@ -32,6 +41,7 @@ import {
   Search,
   ArrowUpDown
 } from 'lucide-react';
+import ScannerButton from '@/app/components/ScannerButton';
 
 interface ExtendedConsumableItem {
   eventConsumableId: number;
@@ -49,12 +59,12 @@ export default function EventPackingPage() {
   const [event, setEvent] = useState<DatabaseEvent | null>(null);
   const [boxes, setBoxes] = useState<DatabaseLocation[]>([]);
   const [activeBoxId, setActiveBoxId] = useState<number | null>(null);
-  const [items, setItems] = useState<DatabaseItem[]>([]);
+  const [items, setItems] = useState<ItemWithLocation[]>([]);
   const [consumablesList, setConsumablesList] = useState<ExtendedConsumableItem[]>([]);
   const [globalConsumables, setGlobalConsumables] = useState<DatabaseConsumable[]>([]);
   
   // New States
-  const [workshopItems, setWorkshopItems] = useState<DatabaseItem[]>([]);
+  const [workshopItems, setWorkshopItems] = useState<ItemWithLocation[]>([]);
   const [permanentLocations, setPermanentLocations] = useState<DatabaseLocation[]>([]);
   
   const [loading, setLoading] = useState<boolean>(true);
@@ -70,6 +80,11 @@ export default function EventPackingPage() {
   const [scanSuccess, setScanSuccess] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scannedItem, setScannedItem] = useState<DatabaseItem | null>(null);
+  
+  // Dynamic Item edit modal integration
+  const [categories, setCategories] = useState<DatabaseCategory[]>([]);
+  const [isItemModalOpen, setIsItemModalOpen] = useState<boolean>(false);
+  const [selectedItemForModal, setSelectedItemForModal] = useState<ItemWithLocation | null>(null);
   
   // Custom states for Web Haptics and Toast Notifications
   const [recentlyUpdatedId, setRecentlyUpdatedId] = useState<string | null>(null);
@@ -146,12 +161,7 @@ export default function EventPackingPage() {
   const [reqQtyVal, setReqQtyVal] = useState<string>('5');
   const [reqResponsible, setReqResponsible] = useState<string>('');
 
-  // 6. Item Edit Modal
-  const [isItemEditModalOpen, setIsItemEditModalOpen] = useState<boolean>(false);
-  const [editingItem, setEditingItem] = useState<DatabaseItem | null>(null);
-  const [editItemStatus, setEditItemStatus] = useState<'in_workshop' | 'assigned_to_event' | 'packed'>('assigned_to_event');
-  const [editItemLocationId, setEditItemLocationId] = useState<string>('');
-  const [editItemResponsible, setEditItemResponsible] = useState<string>('');
+
 
   // MOCK DATA for specific event id 10
   const mockEvent: DatabaseEvent = {
@@ -166,14 +176,14 @@ export default function EventPackingPage() {
     { id: 302, name: 'Skrzynia Elektroniki #2', type: 'event_box', event_id: 10, room: null, responsible_person: null }
   ];
 
-  const mockItems: DatabaseItem[] = [
-    { id: 'I-NR-0101', name: 'Szlifierka kątowa Bosch', location_id: 1, responsible_person: 'Jan Nowak', shop_link: '', status: 'in_workshop' },
-    { id: 'I-NR-0102', name: 'Wkrętarka Makita 18V', location_id: 301, responsible_person: 'Jan Nowak', shop_link: '', status: 'assigned_to_event' },
-    { id: 'I-EL-0103', name: 'Lutownica TS101', location_id: 302, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'packed' },
-    { id: 'I-NR-0104', name: 'Dremel 4000', location_id: 1, responsible_person: 'Adam Kowalski', shop_link: '', status: 'in_workshop' },
-    { id: 'I-NR-0105', name: 'Zestaw kluczy płaskich', location_id: 301, responsible_person: 'Adam Kowalski', shop_link: '', status: 'assigned_to_event' },
-    { id: 'I-EL-0106', name: 'Oscyloskop Siglent', location_id: 302, responsible_person: 'Michał Zieliński', shop_link: '', status: 'packed' },
-    { id: 'I-EL-0107', name: 'Zasilacz laboratoryjny Korad', location_id: 2, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'in_workshop' }
+  const mockItems: ItemWithLocation[] = [
+    { id: 'I-NR-0101', name: 'Szlifierka kątowa Bosch', location_id: 1, responsible_person: 'Jan Nowak', shop_link: '', status: 'in_workshop', locations: { type: 'permanent', event_id: null } },
+    { id: 'I-NR-0102', name: 'Wkrętarka Makita 18V', location_id: 301, responsible_person: 'Jan Nowak', shop_link: '', status: 'assigned_to_event', locations: { type: 'event_box', event_id: 10 } },
+    { id: 'I-EL-0103', name: 'Lutownica TS101', location_id: 302, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'packed', locations: { type: 'event_box', event_id: 10 } },
+    { id: 'I-NR-0104', name: 'Dremel 4000', location_id: 1, responsible_person: 'Adam Kowalski', shop_link: '', status: 'in_workshop', locations: { type: 'permanent', event_id: null } },
+    { id: 'I-NR-0105', name: 'Zestaw kluczy płaskich', location_id: 301, responsible_person: 'Adam Kowalski', shop_link: '', status: 'assigned_to_event', locations: { type: 'event_box', event_id: 10 } },
+    { id: 'I-EL-0106', name: 'Oscyloskop Siglent', location_id: 302, responsible_person: 'Michał Zieliński', shop_link: '', status: 'packed', locations: { type: 'event_box', event_id: 10 } },
+    { id: 'I-EL-0107', name: 'Zasilacz laboratoryjny Korad', location_id: 2, responsible_person: 'Kamil Wiśniewski', shop_link: '', status: 'in_workshop', locations: { type: 'permanent', event_id: null } }
   ];
 
   const mockEventConsumables: ExtendedConsumableItem[] = [
@@ -192,6 +202,13 @@ export default function EventPackingPage() {
     { id: 1, name: 'Szafa A (Narzędziowa)', type: 'permanent', event_id: null, room: 'Warsztat Główny', responsible_person: 'Jan Nowak' },
     { id: 2, name: 'Szafa B (Materiały)', type: 'permanent', event_id: null, room: 'Warsztat Główny', responsible_person: 'Kamil Wiśniewski' },
     { id: 3, name: 'Regał C (Pudełka)', type: 'permanent', event_id: null, room: 'Korytarz', responsible_person: 'Bernie' }
+  ];
+
+  const mockCategories: DatabaseCategory[] = [
+    { id: 1, name: 'Elektronika', code: 'EL' },
+    { id: 2, name: 'Narzędzia ręczne', code: 'NR' },
+    { id: 3, name: 'Materiały montażowe', code: 'MM' },
+    { id: 4, name: 'Pneumatyka', code: 'PN' }
   ];
 
   const fetchData = async () => {
@@ -213,15 +230,15 @@ export default function EventPackingPage() {
 
       // Fetch items assigned to this event
       const boxIds = loadedBoxes.map(b => b.id);
-      let loadedItems: DatabaseItem[] = [];
+      let loadedItems: ItemWithLocation[] = [];
       if (boxIds.length > 0) {
-        const itemsRes = await supabase.from('items').select('*').in('location_id', boxIds);
+        const itemsRes = await supabase.from('items').select('*, locations(type, event_id)').in('location_id', boxIds);
         loadedItems = itemsRes.data || [];
       }
       setItems(loadedItems);
 
       // Fetch items currently in workshop (status = in_workshop)
-      const workshopItemsRes = await supabase.from('items').select('*').eq('status', 'in_workshop');
+      const workshopItemsRes = await supabase.from('items').select('*, locations(type, event_id)').eq('status', 'in_workshop');
       setWorkshopItems(workshopItemsRes.data || []);
 
       // Fetch permanent locations
@@ -251,6 +268,11 @@ export default function EventPackingPage() {
         });
       }
       setConsumablesList(loadedEventCons);
+
+      // Fetch categories
+      const catsRes = await supabase.from('categories').select('*').order('name');
+      setCategories(catsRes.data || []);
+
       setIsDemoMode(false);
     } catch (err) {
       console.warn('Failed to load Supabase data, running mock environment:', err);
@@ -263,6 +285,7 @@ export default function EventPackingPage() {
       setPermanentLocations(mockPermanentLocations);
       setGlobalConsumables(mockConsumables);
       setConsumablesList(mockEventConsumables);
+      setCategories(mockCategories);
     } finally {
       setLoading(false);
     }
@@ -523,12 +546,9 @@ export default function EventPackingPage() {
   };
 
   // --- Durable Items Actions & Modal Helpers ---
-  const openEditItemModal = (item: DatabaseItem) => {
-    setEditingItem(item);
-    setEditItemStatus(item.status);
-    setEditItemLocationId(item.location_id ? item.location_id.toString() : '');
-    setEditItemResponsible(item.responsible_person || '');
-    setIsItemEditModalOpen(true);
+  const openEditItemModal = (item: ItemWithLocation) => {
+    setSelectedItemForModal(item);
+    setIsItemModalOpen(true);
   };
 
   const handlePackItem = async (itemId: string) => {
@@ -672,65 +692,7 @@ export default function EventPackingPage() {
     }
   };
 
-  const handleEditItemSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingItem) return;
 
-    setModalLoading(true);
-    const parsedBoxId = parseInt(editItemLocationId);
-
-    if (isDemoMode) {
-      // Update items status/location
-      setItems(prev => prev.map(i => i.id === editingItem.id ? {
-        ...i,
-        status: editItemStatus,
-        location_id: parsedBoxId,
-        responsible_person: editItemResponsible
-      } : i));
-
-      // Update mockItems
-      mockItems.forEach(i => {
-        if (i.id === editingItem.id) {
-          i.status = editItemStatus;
-          i.location_id = parsedBoxId;
-          i.responsible_person = editItemResponsible;
-        }
-      });
-
-      // If status changed to in_workshop, filter it out from current checklist
-      if (editItemStatus === 'in_workshop') {
-        setItems(prev => prev.filter(i => i.id !== editingItem.id));
-      }
-      
-      setWorkshopItems(mockItems.filter(i => i.status === 'in_workshop'));
-      setIsItemEditModalOpen(false);
-      setEditingItem(null);
-      setModalLoading(false);
-      setScanSuccess('Zapisano zmiany w sprzęcie (tryb demo).');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('items')
-        .update({
-          status: editItemStatus,
-          location_id: parsedBoxId,
-          responsible_person: editItemResponsible || null
-        })
-        .eq('id', editingItem.id);
-
-      if (error) throw error;
-
-      setIsItemEditModalOpen(false);
-      setEditingItem(null);
-      fetchData();
-    } catch (err: any) {
-      alert('Błąd zapisu sprzętu: ' + err.message);
-    } finally {
-      setModalLoading(false);
-    }
-  };
 
   // --- Consumables Quick Increments & Decrements ---
   const handleAdjustConsumable = async (eventConsumableId: number, consumableId: string, delta: number) => {
@@ -874,8 +836,7 @@ export default function EventPackingPage() {
   };
 
   // --- Scanner Logic ---
-  const handleScanCode = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleScanCode = async (skuCode: string) => {
     setScanError(null);
     setScanSuccess(null);
     setScannedItem(null);
@@ -884,40 +845,40 @@ export default function EventPackingPage() {
 
     if (!targetBoxId) {
       setScanError('Wybierz lub stwórz najpierw skrzynię, do której pakujesz.');
+      alert('Wybierz lub stwórz najpierw skrzynię, do której pakujesz.');
       return;
     }
 
-    const rawInput = scanInput.trim();
-    if (!rawInput) return;
+    const cleanSku = skuCode.trim().toUpperCase();
+    if (!cleanSku) return;
 
     // Sprawdzamy pierwszą literę identyfikatora (SKU)
-    const firstChar = rawInput[0]?.toUpperCase();
+    const firstChar = cleanSku[0]?.toUpperCase();
     if (firstChar !== 'I' && firstChar !== 'C') {
       setScanError('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
+      alert('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
       return;
     }
 
     const searchType = firstChar === 'I' ? 'item' : 'consumable';
-    const skuCode = rawInput.toUpperCase();
 
     if (isDemoMode) {
       const scannedItemVal = searchType === 'item'
-        ? mockItems.find(i => i.id.toUpperCase() === skuCode)
+        ? mockItems.find(i => i.id.toUpperCase() === cleanSku)
         : null;
 
       const scannedConsVal = searchType === 'consumable'
-        ? mockConsumables.find(c => c.id.toUpperCase() === skuCode)
+        ? mockConsumables.find(c => c.id.toUpperCase() === cleanSku)
         : null;
 
       if (scannedItemVal) {
-        setScannedItem(scannedItemVal);
-        setScanSuccess(`Znaleziono sprzęt trwały: "${scannedItemVal.name}" (ID #${scannedItemVal.id}). Możesz teraz zarządzać jego statusem i przypisaniem.`);
-        setScanInput('');
+        setSelectedItemForModal(scannedItemVal);
+        setIsItemModalOpen(true);
         return;
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === skuCode && c.locationId === targetBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === cleanSku && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
@@ -925,11 +886,11 @@ export default function EventPackingPage() {
           targetBoxId: targetBoxId
         });
         setQtyToPack('1');
-        setScanInput('');
         return;
       }
 
-      setScanError(`Nie znaleziono kodu: ${rawInput} w bazie.`);
+      setScanError(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
+      alert(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
       return;
     }
 
@@ -940,28 +901,27 @@ export default function EventPackingPage() {
       if (searchType === 'item') {
         const { data: itemData } = await supabase
           .from('items')
-          .select('*')
-          .eq('id', skuCode)
+          .select('*, locations(type, event_id)')
+          .eq('id', cleanSku)
           .maybeSingle();
         scannedItemVal = itemData;
       } else {
         const { data: consData } = await supabase
           .from('consumables')
           .select('*')
-          .eq('id', skuCode)
+          .eq('id', cleanSku)
           .maybeSingle();
         scannedConsVal = consData;
       }
 
       if (scannedItemVal) {
-        setScannedItem(scannedItemVal);
-        setScanSuccess(`Znaleziono sprzęt trwały: "${scannedItemVal.name}" (ID #${scannedItemVal.id}). Możesz teraz zarządzać jego statusem i przypisaniem.`);
-        setScanInput('');
+        setSelectedItemForModal(scannedItemVal);
+        setIsItemModalOpen(true);
         return;
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === skuCode && c.locationId === targetBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === cleanSku && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
@@ -969,11 +929,11 @@ export default function EventPackingPage() {
           targetBoxId: targetBoxId
         });
         setQtyToPack('1');
-        setScanInput('');
         return;
       }
 
-      setScanError(`Nie znaleziono kodu: ${rawInput} w bazie.`);
+      setScanError(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
+      alert(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
     } catch (err) {
       console.error(err);
       setScanError('Błąd podczas odczytu kodu.');
@@ -1183,9 +1143,9 @@ export default function EventPackingPage() {
                 <Trophy className="h-7 w-7 text-blue-400 shrink-0" />
                 {event.name}
               </h1>
-              <div className="flex items-center gap-2 text-zinc-500 text-xs mt-1.5 font-medium">
-                <Calendar className="h-3.5 w-3.5 text-zinc-600" />
-                <span>Wyjazd: <span className="text-zinc-350">{event.start_date}</span></span>
+              <div className="flex items-center gap-2 text-zinc-350 text-sm mt-1.5 font-medium">
+                <Calendar className="h-4 w-4 text-blue-400 shrink-0" />
+                <span>Wyjazd: <span className="text-white font-bold">{event.start_date}</span></span>
                 <span className="text-zinc-800">•</span>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20`}>
                   {event.is_active ? 'Przygotowania aktywne' : 'Wyjazd zakończony'}
@@ -1216,10 +1176,10 @@ export default function EventPackingPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         <div className="lg:col-span-1 space-y-4">
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl shadow-black/10">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-xs tracking-wider uppercase text-zinc-500">Skrzynie Wyjazdowe</h3>
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-zinc-950 border border-zinc-850 text-zinc-400 rounded">
+              <h3 className="font-bold text-zinc-300 text-xs tracking-wider uppercase">Skrzynie Wyjazdowe</h3>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-zinc-950 border border-zinc-800 text-zinc-300 rounded font-mono">
                 {boxes.length}
               </span>
             </div>
@@ -1233,8 +1193,8 @@ export default function EventPackingPage() {
                 }}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
                   activeBoxId === null
-                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/35 font-bold shadow-lg shadow-blue-500/[0.02]'
-                    : 'bg-zinc-950/60 text-zinc-400 border-zinc-850 hover:bg-zinc-900/40 hover:text-zinc-200'
+                    ? 'bg-blue-500/15 text-blue-400 border-blue-500/35 font-bold shadow-lg shadow-blue-500/[0.02]'
+                    : 'bg-zinc-950/90 text-zinc-300 border-zinc-800/80 hover:bg-zinc-900 hover:text-white hover:border-zinc-700'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -1245,7 +1205,7 @@ export default function EventPackingPage() {
               </button>
 
               {boxes.length === 0 ? (
-                <div className="p-4 text-center text-xs text-zinc-500 border border-dashed border-zinc-850 rounded-xl">
+                <div className="p-4 text-center text-xs text-zinc-550 border border-dashed border-zinc-800 rounded-xl">
                   Brak skrzyń. Stwórz nową skrzynię poniżej.
                 </div>
               ) : (
@@ -1258,6 +1218,7 @@ export default function EventPackingPage() {
                   const totalItems = boxItems.length + boxConsumables.length;
                   const packedItems = packedBoxItems.length + packedBoxConsumables.length;
                   const isBoxActive = activeBoxId === box.id;
+                  const allPacked = totalItems > 0 && packedItems === totalItems;
 
                   return (
                     <div key={box.id} className="flex gap-1.5 items-center">
@@ -1269,24 +1230,26 @@ export default function EventPackingPage() {
                         }}
                         className={`flex-1 flex flex-col items-start px-3.5 py-2.5 rounded-xl text-sm transition-all border text-left ${
                           isBoxActive
-                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/35 font-bold shadow-lg shadow-blue-500/[0.02]'
-                            : 'bg-zinc-950/60 text-zinc-400 border-zinc-850 hover:bg-zinc-900/40 hover:text-zinc-200'
+                            ? 'bg-blue-500/15 text-blue-400 border-blue-500/35 font-bold shadow-lg shadow-blue-500/[0.02]'
+                            : 'bg-zinc-950/90 text-zinc-300 border-zinc-800/80 hover:bg-zinc-900 hover:text-white hover:border-zinc-700'
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
-                          <span className="font-bold truncate pr-2 text-sm">{box.name}</span>
+                          <span className={`font-bold truncate pr-2 text-sm ${isBoxActive ? 'text-blue-400' : 'text-zinc-100'}`}>{box.name}</span>
                           {isBoxActive && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
                         </div>
                         
-                        <div className="flex justify-between items-center w-full mt-1.5 text-xs text-zinc-500 font-medium">
-                          <span className="truncate max-w-[80px]">{box.room || 'Brak lokacji'}</span>
-                          <span>Spakowano: {packedItems}/{totalItems}</span>
+                        <div className="flex justify-between items-center w-full mt-1.5 text-xs font-semibold">
+                          <span className="text-zinc-400 truncate max-w-[80px] font-normal">{box.room || 'Brak lokacji'}</span>
+                          <span className={allPacked ? 'text-emerald-400 font-bold' : 'text-zinc-300'}>
+                            Spakowano: <span>{packedItems}/{totalItems}</span>
+                          </span>
                         </div>
                       </button>
                       
                       <button
                         onClick={() => openEditBoxModal(box)}
-                        className="p-3 rounded-xl bg-zinc-950/40 border border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-750 transition-all active:scale-95 shrink-0"
+                        className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 hover:bg-zinc-900 transition-all active:scale-95 shrink-0"
                         title="Zarządzaj skrzynią"
                       >
                         <Settings className="h-3.5 w-3.5" />
@@ -1382,86 +1345,6 @@ export default function EventPackingPage() {
             </div>
           </div>
 
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <QrCode className="h-5 w-5 text-blue-400 animate-pulse" />
-                <div>
-                  <h4 className="font-bold text-zinc-200 text-sm">Szybkie skanowanie / pakowanie</h4>
-                  <p className="text-[11px] text-zinc-550">Wpisz ID kodu (np. I102, C202) aby spakować do skrzyni</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                <span className="text-zinc-500">Docelowa skrzynia:</span>
-                {activeBoxId !== null ? (
-                  <span className="px-2.5 py-1 text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/25 rounded-lg">
-                    {getBoxName(activeBoxId)}
-                  </span>
-                ) : (
-                  <select
-                    value={scanTargetBoxId}
-                    onChange={(e) => setScanTargetBoxId(e.target.value)}
-                    disabled={boxes.length === 0}
-                    className="px-2 py-1 text-xs font-medium rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 focus:outline-none focus:border-blue-500/50"
-                  >
-                    {boxes.map(box => (
-                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            </div>
-
-            <form onSubmit={handleScanCode} className="flex gap-2">
-              <input
-                type="text"
-                required
-                placeholder={boxes.length > 0 ? "Wpisz kod przedmiotu (np. I102, C201)..." : "Stwórz najpierw skrzynię"}
-                disabled={boxes.length === 0}
-                value={scanInput}
-                onChange={(e) => setScanInput(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 text-xs rounded-lg bg-zinc-950 border border-zinc-850 text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-blue-500/50 disabled:opacity-40"
-              />
-              <button
-                type="submit"
-                disabled={boxes.length === 0}
-                className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-black font-bold text-xs rounded-lg active:scale-95 transition-all duration-100 disabled:opacity-40"
-              >
-                Zeskanuj
-              </button>
-            </form>
-
-            {scanError && (
-              <div className="px-3.5 py-2.5 rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-450 text-xs flex gap-2 animate-in fade-in duration-200">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
-                <span>{scanError}</span>
-              </div>
-            )}
-
-            {scanSuccess && (
-              <div className="px-3.5 py-2.5 rounded-lg border border-blue-500/20 bg-blue-500/5 text-blue-400 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
-                <div className="flex gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500" />
-                  <span>{scanSuccess}</span>
-                </div>
-                {scannedItem && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      openEditItemModal(scannedItem);
-                      setScanSuccess(null);
-                      setScannedItem(null);
-                    }}
-                    className="px-2.5 py-1 bg-blue-500 hover:bg-blue-400 text-black font-bold text-[10px] rounded transition-all active:scale-95"
-                  >
-                    Modyfikuj
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-850 pb-3 gap-3">
               <div className="flex space-x-6">
@@ -1489,31 +1372,38 @@ export default function EventPackingPage() {
                 </button>
               </div>
 
-              {activeTab === 'items' ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAssignItemModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-indigo-400 hover:bg-indigo-350 rounded-lg active:scale-95 transition-all self-start sm:self-auto shadow-sm"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Przypisz z warsztatu
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddReqModalOpen(true);
-                    if (boxes.length > 0) {
-                      setReqBoxId(boxes[0].id.toString());
-                    }
-                    if (globalConsumables.length > 0) {
-                      setReqConsumableId(globalConsumables[0].id.toString());
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-teal-400 hover:bg-teal-355 rounded-lg active:scale-95 transition-all self-start sm:self-auto shadow-sm"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Dodaj zapotrzebowanie
-                </button>
-              )}
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <ScannerButton 
+                  onScan={handleScanCode} 
+                  buttonText="Pakuj Skanerem" 
+                  className="!bg-blue-500/10 !text-blue-400 !border !border-blue-500/20 hover:!bg-blue-500/20 hover:!text-blue-300 py-2 px-3 text-xs" 
+                />
+                {activeTab === 'items' ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAssignItemModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-indigo-400 hover:bg-indigo-350 rounded-lg active:scale-95 transition-all shadow-sm shrink-0"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Przypisz z warsztatu
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddReqModalOpen(true);
+                      if (boxes.length > 0) {
+                        setReqBoxId(boxes[0].id.toString());
+                      }
+                      if (globalConsumables.length > 0) {
+                        setReqConsumableId(globalConsumables[0].id.toString());
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-teal-400 hover:bg-teal-355 rounded-lg active:scale-95 transition-all shadow-sm shrink-0"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Dodaj zapotrzebowanie
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-1">
@@ -1600,29 +1490,29 @@ export default function EventPackingPage() {
                     return (
                       <div
                         key={item.id}
-                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 transition-all duration-300 border border-transparent ${
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 transition-all duration-305 border rounded-xl ${
                           isHighlighted
-                            ? 'bg-blue-500/20 border-blue-500/30 shadow-md duration-75 scale-[1.002]'
+                            ? 'bg-blue-500/20 border-blue-500/40 shadow-md scale-[1.002]'
                             : isPacked
-                              ? 'bg-blue-500/[0.01] hover:bg-blue-500/[0.02]'
-                              : 'bg-rose-500/[0.01] hover:bg-rose-500/[0.02]'
+                              ? 'bg-blue-500/[0.03] border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/[0.05]'
+                              : 'bg-rose-500/[0.03] border-rose-500/20 hover:border-rose-500/40 hover:bg-rose-500/[0.05]'
                         }`}
                       >
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[9px] font-bold text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-850">
+                            <span className="font-mono text-[9px] font-bold text-zinc-400 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-800">
                               #{item.id}
                             </span>
-                            <span className="font-bold text-zinc-200 text-sm">{item.name}</span>
+                            <span className="font-bold text-white text-sm">{item.name}</span>
                           </div>
                           
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-1.5 text-[11px] text-zinc-500 font-medium">
-                            <span className="flex items-center gap-1">
-                              Opiekun: <span className="text-zinc-455">{item.responsible_person || 'brak'}</span>
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-1.5 text-[11px] font-semibold">
+                            <span className="flex items-center gap-1 text-zinc-400">
+                              Opiekun: <span className="text-zinc-200">{item.responsible_person || 'brak'}</span>
                             </span>
-                            <span className="text-zinc-800">•</span>
-                            <span className="flex items-center gap-1">
-                              Skrzynia: <span className="text-zinc-455">{getBoxName(item.location_id)}</span>
+                            <span className="text-zinc-700 font-bold">•</span>
+                            <span className="flex items-center gap-1 text-zinc-400">
+                              Skrzynia: <span className="text-blue-400 font-bold">{getBoxName(item.location_id)}</span>
                             </span>
                           </div>
                         </div>
@@ -1708,19 +1598,19 @@ export default function EventPackingPage() {
                     return (
                       <div
                         key={cons.eventConsumableId}
-                        className={`p-4 space-y-2.5 transition-all duration-300 border border-transparent ${
+                        className={`p-4 space-y-2.5 transition-all duration-305 border rounded-xl ${
                           isHighlighted
-                            ? 'bg-blue-500/20 border-blue-500/30 shadow-md duration-75 scale-[1.002]'
+                            ? 'bg-blue-500/20 border-blue-500/40 shadow-md scale-[1.002]'
                             : isComplete
-                              ? 'bg-blue-500/[0.005] hover:bg-blue-500/[0.015]'
-                              : 'bg-zinc-900/10 hover:bg-zinc-900/20'
+                              ? 'bg-blue-500/[0.03] border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/[0.05]'
+                              : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/80 shadow-md shadow-black/5'
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div>
-                            <span className="font-bold text-zinc-100 text-base">{cons.name}</span>
-                            <span className="text-xs text-zinc-400 font-mono ml-2.5 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded">
-                              Skrzynia: {getBoxName(cons.locationId)}
+                            <span className="font-bold text-white text-base">{cons.name}</span>
+                            <span className="text-xs text-zinc-300 font-semibold font-mono ml-2.5 bg-zinc-950/80 border border-zinc-800/80 px-2.5 py-1 rounded">
+                              Skrzynia: <span className="text-blue-400 font-bold">{getBoxName(cons.locationId)}</span>
                             </span>
                           </div>
 
@@ -1735,7 +1625,7 @@ export default function EventPackingPage() {
                                 <Minus className="h-3 w-3" />
                               </button>
 
-                              <span className={`font-mono text-sm font-bold min-w-[70px] text-center ${isComplete ? 'text-blue-400' : 'text-zinc-400'}`}>
+                              <span className={`font-mono text-sm font-bold min-w-[70px] text-center ${isComplete ? 'text-blue-400' : 'text-zinc-200'}`}>
                                 {cons.quantityPacked} / {cons.quantityRequired}
                               </span>
 
@@ -2142,6 +2032,34 @@ export default function EventPackingPage() {
         </div>
       )}
 
+      {isItemModalOpen && (
+        <ItemEditModal
+          isOpen={isItemModalOpen}
+          onClose={() => {
+            setIsItemModalOpen(false);
+            setSelectedItemForModal(null);
+          }}
+          editingItem={selectedItemForModal}
+          locations={[...boxes, ...permanentLocations]}
+          categories={categories}
+          isDemoMode={isDemoMode}
+          onSave={fetchData}
+          itemsList={[...items, ...workshopItems]}
+          onSaveDemo={(item, isEdit) => {
+            if (isEdit) {
+              mockItems.forEach((i, idx) => {
+                if (i.id === item.id) {
+                  mockItems[idx] = item;
+                }
+              });
+            } else {
+              mockItems.push(item);
+            }
+            fetchData();
+          }}
+        />
+      )}
+
       {isAddReqModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
           <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
@@ -2230,7 +2148,7 @@ export default function EventPackingPage() {
                   type="text"
                   placeholder="Domyślnie właściciel wybranej skrzyni"
                   value={reqResponsible}
-                  onChange={(e) => setEditItemResponsible(e.target.value)}
+                  onChange={(e) => setReqResponsible(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -2256,128 +2174,7 @@ export default function EventPackingPage() {
         </div>
       )}
 
-      {isItemEditModalOpen && editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Settings className="h-5 w-5 text-blue-400" />
-                Zarządzaj Przedmiotem
-              </h3>
-              <button 
-                type="button"
-                onClick={() => {
-                  setIsItemEditModalOpen(false);
-                  setEditingItem(null);
-                }}
-                className="text-zinc-400 hover:text-white transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
 
-            <form onSubmit={handleEditItemSubmit} className="p-6 space-y-4">
-              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                <div className="text-xs text-zinc-500">Nazwa przedmiotu:</div>
-                <div className="font-bold text-white text-base mt-0.5">{editingItem.name}</div>
-                <div className="text-[11px] text-zinc-500 font-mono mt-1">ID zasobu: #{editingItem.id}</div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Status zasobu
-                </label>
-                <select
-                  value={editItemStatus}
-                  onChange={(e) => {
-                    const newStatus = e.target.value as any;
-                    setEditItemStatus(newStatus);
-                    if (newStatus === 'in_workshop') {
-                      const defaultLoc = permanentLocations.length > 0 ? permanentLocations[0].id.toString() : '1';
-                      setEditItemLocationId(defaultLoc);
-                    } else if (boxes.length > 0 && (editingItem.status === 'in_workshop' || !editItemLocationId)) {
-                      setEditItemLocationId(boxes[0].id.toString());
-                    }
-                  }}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
-                >
-                  <option value="in_workshop" className="bg-zinc-950 text-zinc-200">W warsztacie (Niewyjeżdżający)</option>
-                  <option value="assigned_to_event" className="bg-zinc-950 text-zinc-200">Przypisany na wyjazd (Brakujący)</option>
-                  <option value="packed" className="bg-zinc-950 text-zinc-200">Spakowany do skrzyni</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  {editItemStatus === 'in_workshop' ? 'Lokalizacja w warsztacie (Szafa)' : 'Skrzynia docelowa na wyjeździe'}
-                </label>
-                {editItemStatus === 'in_workshop' ? (
-                  <select
-                    value={editItemLocationId}
-                    onChange={(e) => setEditItemLocationId(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
-                  >
-                    {permanentLocations.map(loc => (
-                      <option key={loc.id} value={loc.id} className="bg-zinc-950 text-zinc-200">
-                        {loc.name} {loc.room ? `(${loc.room})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    value={editItemLocationId}
-                    onChange={(e) => {
-                      setEditItemLocationId(e.target.value);
-                      const targetBox = boxes.find(b => b.id.toString() === e.target.value);
-                      if (targetBox?.responsible_person) {
-                        setEditItemResponsible(targetBox.responsible_person);
-                      }
-                    }}
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
-                  >
-                    {boxes.map(box => (
-                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Opiekun sprzętu
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editItemResponsible}
-                  onChange={(e) => setEditItemResponsible(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsItemEditModalOpen(false);
-                    setEditingItem(null);
-                  }}
-                  className="px-4 py-2 rounded-lg text-sm bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
-                >
-                  Anuluj
-                </button>
-                <button
-                  type="submit"
-                  disabled={modalLoading}
-                  className="px-5 py-2 rounded-lg text-sm bg-blue-500 text-black font-bold hover:bg-blue-400 transition-colors disabled:opacity-50"
-                >
-                  Zapisz zmiany
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-300 ${

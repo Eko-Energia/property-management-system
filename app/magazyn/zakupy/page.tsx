@@ -227,7 +227,7 @@ export default function ZakupyPage() {
       return;
     }
 
-    const qty = parseInt(newReqQty);
+    const qty = newReqType === 'item' ? 1 : parseInt(newReqQty);
     if (isNaN(qty) || qty <= 0) {
       alert('Ilość musi być liczbą większą niż 0.');
       return;
@@ -431,11 +431,8 @@ export default function ZakupyPage() {
     setReceiveMode('existing');
     setReceiveExistingConsId('');
     setReceiveIdInput('');
-    
-    // Default location configuration
-    const defaultLoc = locations.length > 0 ? locations[0] : null;
-    setReceiveLocationId(defaultLoc ? defaultLoc.id.toString() : '');
-    setReceiveResponsiblePerson(defaultLoc && defaultLoc.responsible_person ? defaultLoc.responsible_person : '');
+    setReceiveLocationId('');
+    setReceiveResponsiblePerson('');
     
     setReceiveMinQty((item.quantity * 2).toString());
     setReceiveCategoryId(item.category_id ? item.category_id.toString() : '');
@@ -1143,7 +1140,13 @@ export default function ZakupyPage() {
                     </span>
                     <select
                       value={newReqType}
-                      onChange={(e) => setNewReqType(e.target.value as 'item' | 'consumable')}
+                      onChange={(e) => {
+                        const val = e.target.value as 'item' | 'consumable';
+                        setNewReqType(val);
+                        if (val === 'item') {
+                          setNewReqQty('1');
+                        }
+                      }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm appearance-none bg-none"
                     >
                       <option value="consumable" className="bg-zinc-950 text-zinc-250">Zużywalne (śruby, taśmy, frezy)</option>
@@ -1175,11 +1178,17 @@ export default function ZakupyPage() {
                       type="number"
                       required
                       min="1"
-                      value={newReqQty}
+                      disabled={newReqType === 'item'}
+                      value={newReqType === 'item' ? '1' : newReqQty}
                       onChange={(e) => setNewReqQty(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
+                  {newReqType === 'item' && (
+                    <span className="block text-[10px] text-zinc-500 mt-1 leading-normal">
+                      Sprzęt trwały wymaga unikalnego SKU dla każdej sztuki (zawsze = 1).
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">

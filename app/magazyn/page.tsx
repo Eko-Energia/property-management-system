@@ -1,8 +1,19 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, DatabaseItem, DatabaseConsumable, DatabaseLocation, DatabaseCategory } from '@/utils/supabase/client';
 import SearchableSelect from '@/app/components/SearchableSelect';
+import ScannerButton from '@/app/components/ScannerButton';
+import ItemEditModal from '@/app/components/ItemEditModal';
+
+interface ItemWithLocation extends DatabaseItem {
+  locations?: {
+    type: 'permanent' | 'event_box';
+    event_id: number | null;
+  } | null;
+}
+
 import { 
   Package, 
   Boxes, 
@@ -24,9 +35,12 @@ import {
   Tag
 } from 'lucide-react';
 
-export default function MagazynPage() {
+function MagazynPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [activeTab, setActiveTab] = useState<'items' | 'consumables'>('items');
-  const [items, setItems] = useState<DatabaseItem[]>([]);
+  const [items, setItems] = useState<ItemWithLocation[]>([]);
   const [consumables, setConsumables] = useState<DatabaseConsumable[]>([]);
   const [locations, setLocations] = useState<DatabaseLocation[]>([]);
   const [categories, setCategories] = useState<DatabaseCategory[]>([]);
@@ -69,15 +83,6 @@ export default function MagazynPage() {
   const [consSortKey, setConsSortKey] = useState<'name' | 'room' | 'responsible' | 'qty' | 'min_qty' | 'id'>('id');
   const [consSortDir, setConsSortDir] = useState<'asc' | 'desc'>('asc');
 
-  // Scanner state
-  const [scanIdInput, setScanIdInput] = useState<string>('');
-  const [scanResult, setScanResult] = useState<
-    | { type: 'item'; data: DatabaseItem; message?: string }
-    | { type: 'consumable'; data: DatabaseConsumable; message?: string }
-    | null
-  >(null);
-  const [scanError, setScanError] = useState<string | null>(null);
-
   // --- CRUD States ---
   
   // 1. Locations modal
@@ -97,14 +102,7 @@ export default function MagazynPage() {
 
   // 2. Item modal
   const [isItemModalOpen, setIsItemModalOpen] = useState<boolean>(false);
-  const [editingItem, setEditingItem] = useState<DatabaseItem | null>(null); // null = add
-  const [itemIdInput, setItemIdInput] = useState<string>('');
-  const [itemName, setItemName] = useState<string>('');
-  const [itemResponsible, setItemResponsible] = useState<string>('');
-  const [itemLink, setItemLink] = useState<string>('');
-  const [itemLocId, setItemLocId] = useState<string>('');
-  const [itemStatus, setItemStatus] = useState<'in_workshop' | 'assigned_to_event' | 'packed'>('in_workshop');
-  const [itemCategoryId, setItemCategoryId] = useState<string>('');
+  const [editingItem, setEditingItem] = useState<ItemWithLocation | null>(null); // null = add
 
   // 3. Consumable modal
   const [isConsumableModalOpen, setIsConsumableModalOpen] = useState<boolean>(false);
@@ -123,6 +121,8 @@ export default function MagazynPage() {
     { id: 1, name: 'Szafa Główna A', type: 'permanent', event_id: null, room: 'Warsztat Główny', responsible_person: 'Bernie' },
     { id: 2, name: 'Regał z Elektroniką B', type: 'permanent', event_id: null, room: 'Pokój Projektowy 2', responsible_person: 'Kamil' },
     { id: 3, name: 'Szuflada Narzędziowa C', type: 'permanent', event_id: null, room: 'Warsztat Główny', responsible_person: 'Adam Kowalski' },
+    { id: 4, name: 'Skrzynia Wyjazdowa #1', type: 'event_box', event_id: 10, room: null, responsible_person: 'Jan Nowak' },
+    { id: 5, name: 'Skrzynia Wyjazdowa #2', type: 'event_box', event_id: 10, room: null, responsible_person: 'Kamil' },
   ];
 
   const mockCategories: DatabaseCategory[] = [
@@ -132,11 +132,11 @@ export default function MagazynPage() {
     { id: 4, name: 'Pneumatyka', code: 'PN' }
   ];
 
-  const mockItems: DatabaseItem[] = [
-    { id: 'I-NR-0001', name: 'Dremel 4000', location_id: 1, responsible_person: 'Bernie', shop_link: 'https://dremel.pl', status: 'in_workshop', category_id: 2 },
-    { id: 'I-NR-0002', name: 'Wkrętarka Makita 18V', location_id: 2, responsible_person: 'Jan Nowak', shop_link: 'https://makita.pl', status: 'assigned_to_event', category_id: 2 },
-    { id: 'I-EL-0001', name: 'Lutownica TS101', location_id: 2, responsible_person: 'Kamil', shop_link: 'https://gotronik.pl', status: 'packed', category_id: 1 },
-    { id: 'I-NR-0003', name: 'Zestaw kluczy płaskich', location_id: 3, responsible_person: 'Adam Kowalski', shop_link: 'https://sklep.pl', status: 'in_workshop', category_id: 2 },
+  const mockItems: ItemWithLocation[] = [
+    { id: 'I-NR-0001', name: 'Dremel 4000', location_id: 1, responsible_person: 'Bernie', shop_link: 'https://dremel.pl', status: 'in_workshop', category_id: 2, locations: { type: 'permanent', event_id: null } },
+    { id: 'I-NR-0002', name: 'Wkrętarka Makita 18V', location_id: 4, responsible_person: 'Jan Nowak', shop_link: 'https://makita.pl', status: 'assigned_to_event', category_id: 2, locations: { type: 'event_box', event_id: 10 } },
+    { id: 'I-EL-0001', name: 'Lutownica TS101', location_id: 5, responsible_person: 'Kamil', shop_link: 'https://gotronik.pl', status: 'packed', category_id: 1, locations: { type: 'event_box', event_id: 10 } },
+    { id: 'I-NR-0003', name: 'Zestaw kluczy płaskich', location_id: 3, responsible_person: 'Adam Kowalski', shop_link: 'https://sklep.pl', status: 'in_workshop', category_id: 2, locations: { type: 'permanent', event_id: null } },
   ];
 
   const mockConsumables: DatabaseConsumable[] = [
@@ -151,8 +151,8 @@ export default function MagazynPage() {
       setLoading(true);
       
       const [locsRes, itemsRes, consRes, catsRes] = await Promise.all([
-        supabase.from('locations').select('*').eq('type', 'permanent'),
-        supabase.from('items').select('*'),
+        supabase.from('locations').select('*'),
+        supabase.from('items').select('*, locations(type, event_id)'),
         supabase.from('consumables').select('*'),
         supabase.from('categories').select('*').order('name')
       ]);
@@ -183,15 +183,60 @@ export default function MagazynPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Location Picker Event handlers (Default Opiekun resolution) ---
-  const handleItemLocChange = (locId: string) => {
-    setItemLocId(locId);
-    // Auto-fill responsible person if selected container has an owner and we're ADDING
-    const loc = locations.find(l => l.id.toString() === locId);
-    if (loc && loc.responsible_person && !editingItem) {
-      setItemResponsible(loc.responsible_person);
+  // Support open parameter deep-linking from QR code scans
+  useEffect(() => {
+    if (loading) return;
+
+    const openSku = searchParams.get('open');
+    if (!openSku) return;
+
+    const upperSku = openSku.toUpperCase().trim();
+
+    // Check in items list
+    const matchedItem = items.find(i => i.id.toUpperCase() === upperSku);
+    if (matchedItem) {
+      setActiveTab('items');
+      openEditItemModal(matchedItem);
+      router.replace('/magazyn');
+      return;
     }
+
+    // Check in consumables list
+    const matchedConsumable = consumables.find(c => c.id.toUpperCase() === upperSku);
+    if (matchedConsumable) {
+      setActiveTab('consumables');
+      openEditConsumableModal(matchedConsumable);
+      router.replace('/magazyn');
+      return;
+    }
+  }, [loading, items, consumables, searchParams, router]);
+
+  // Handler for scans made using ScannerButton inside app
+  const handleBarcodeScan = (skuCode: string) => {
+    const upperSku = skuCode.toUpperCase().trim();
+
+    // Check in items
+    const item = items.find(i => i.id.toUpperCase() === upperSku);
+    if (item) {
+      setActiveTab('items');
+      openEditItemModal(item);
+      showToast(`Otwarto przedmiot: ${item.name}`);
+      return;
+    }
+
+    // Check in consumables
+    const cons = consumables.find(c => c.id.toUpperCase() === upperSku);
+    if (cons) {
+      setActiveTab('consumables');
+      openEditConsumableModal(cons);
+      showToast(`Otwarto materiał: ${cons.name}`);
+      return;
+    }
+
+    showToast(`Nie znaleziono kodu "${skuCode}" w magazynie.`, 'error');
   };
+
+  // --- Location Picker Event handlers (Default Opiekun resolution) ---
 
   const handleConsLocChange = (locId: string) => {
     setConsLocId(locId);
@@ -623,17 +668,6 @@ export default function MagazynPage() {
     }
   };
 
-  const handleItemCategoryChange = async (catIdStr: string) => {
-    setItemCategoryId(catIdStr);
-    if (!editingItem && catIdStr) {
-      const catId = parseInt(catIdStr, 10);
-      if (!isNaN(catId)) {
-        const suggested = await suggestNextSku('I', catId);
-        setItemIdInput(suggested);
-      }
-    }
-  };
-
   const handleConsCategoryChange = async (catIdStr: string) => {
     setConsCategoryId(catIdStr);
     if (!editingConsumable && catIdStr) {
@@ -645,125 +679,14 @@ export default function MagazynPage() {
     }
   };
 
-  // --- Item CRUD Handlers ---
   const openAddItemModal = () => {
     setEditingItem(null);
-    setItemIdInput('');
-    setItemName('');
-    setItemResponsible('');
-    setItemLink('');
-    setItemLocId(locations.length > 0 ? locations[0].id.toString() : '');
-    setItemStatus('in_workshop');
-    setItemCategoryId('');
-    
-    // Auto-fill responsible person from default cabinet manager
-    if (locations.length > 0 && locations[0].responsible_person) {
-      setItemResponsible(locations[0].responsible_person);
-    }
-    
     setIsItemModalOpen(true);
   };
 
-  const openEditItemModal = (item: DatabaseItem) => {
+  const openEditItemModal = (item: ItemWithLocation) => {
     setEditingItem(item);
-    setItemIdInput(item.id);
-    setItemName(item.name);
-    setItemResponsible(item.responsible_person);
-    setItemLink(item.shop_link || '');
-    setItemLocId(item.location_id ? item.location_id.toString() : '');
-    setItemStatus(item.status);
-    setItemCategoryId(item.category_id ? item.category_id.toString() : '');
     setIsItemModalOpen(true);
-  };
-
-  const handleItemSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemName.trim() || !itemResponsible.trim() || !itemIdInput.trim()) return;
-
-    setModalLoading(true);
-    
-    // Walidacja formatu ID (SKU)
-    const skuRegex = /^(I|C)-[A-Z]{2,3}-\d{4}$/;
-    if (!skuRegex.test(itemIdInput.trim())) {
-      showToast('Błędny format ID! Wymagany format: I-KOD-XXXX, np. I-EL-0001', 'error');
-      setModalLoading(false);
-      return;
-    }
-
-    const parsedLocId = parseInt(itemLocId) || null;
-    const parsedCategoryId = parseInt(itemCategoryId) || null;
-
-    if (isDemoMode) {
-      if (editingItem) {
-        setItems(prev => prev.map(i => i.id === editingItem.id ? {
-          ...i,
-          name: itemName.trim(),
-          responsible_person: itemResponsible.trim(),
-          shop_link: itemLink.trim(),
-          location_id: parsedLocId as any,
-          status: itemStatus,
-          category_id: parsedCategoryId
-        } : i));
-      } else {
-        if (items.some(i => i.id.toUpperCase() === itemIdInput.trim().toUpperCase())) {
-          showToast('Przedmiot o tym ID już istnieje!', 'error');
-          setModalLoading(false);
-          return;
-        }
-        const newItem: DatabaseItem = {
-          id: itemIdInput.trim(),
-          name: itemName.trim(),
-          responsible_person: itemResponsible.trim(),
-          shop_link: itemLink.trim(),
-          location_id: parsedLocId as any,
-          status: itemStatus,
-          category_id: parsedCategoryId
-        };
-        setItems(prev => [...prev, newItem]);
-      }
-      setIsItemModalOpen(false);
-      setModalLoading(false);
-      return;
-    }
-
-    try {
-      if (editingItem) {
-        const { error } = await supabase
-          .from('items')
-          .update({
-            name: itemName.trim(),
-            responsible_person: itemResponsible.trim(),
-            shop_link: itemLink.trim(),
-            location_id: parsedLocId,
-            status: itemStatus,
-            category_id: parsedCategoryId
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('items')
-          .insert({
-            id: itemIdInput.trim(),
-            name: itemName.trim(),
-            responsible_person: itemResponsible.trim(),
-            shop_link: itemLink.trim(),
-            location_id: parsedLocId,
-            status: itemStatus,
-            category_id: parsedCategoryId
-          });
-
-        if (error) throw error;
-      }
-
-      setIsItemModalOpen(false);
-      fetchData();
-    } catch (err: any) {
-      alert('Błąd zapisu przedmiotu: ' + err.message);
-    } finally {
-      setModalLoading(false);
-    }
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -798,14 +721,9 @@ export default function MagazynPage() {
     setConsQty(0);
     setConsMinQty(1);
     setConsLink('');
-    setConsLocId(locations.length > 0 ? locations[0].id.toString() : '');
+    setConsLocId('');
     setConsResponsible('');
     setConsCategoryId('');
-    
-    // Auto-fill responsible person from default cabinet manager
-    if (locations.length > 0 && locations[0].responsible_person) {
-      setConsResponsible(locations[0].responsible_person);
-    }
     
     setIsConsumableModalOpen(true);
   };
@@ -968,67 +886,6 @@ export default function MagazynPage() {
     }
   };
 
-  // --- Scanner Logic (Modified to open modal on scan success) ---
-  const handleScan = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setScanError(null);
-    setScanResult(null);
-
-    const rawInput = scanIdInput.trim();
-    if (!rawInput) return;
-
-    // Sprawdzamy pierwszą literę identyfikatora
-    const firstChar = rawInput[0]?.toUpperCase();
-    if (firstChar !== 'I' && firstChar !== 'C') {
-      setScanError('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
-      return;
-    }
-
-    const searchType = firstChar === 'I' ? 'item' : 'consumable';
-
-    // 1. Search in Items
-    const scannedItem = searchType === 'item'
-      ? items.find(i => i.id.toUpperCase() === rawInput.toUpperCase())
-      : null;
-
-    // 2. Search in Consumables
-    const scannedCons = searchType === 'consumable'
-      ? consumables.find(c => c.id.toUpperCase() === rawInput.toUpperCase())
-      : null;
-
-    if (scannedItem) {
-      setScanResult({
-        type: 'item',
-        data: scannedItem,
-        message: `Znalazłeś sprzęt trwały. Kliknij poniżej, aby otworzyć edycję.`
-      });
-      setScanIdInput('');
-      return;
-    }
-
-    if (scannedCons) {
-      setScanResult({
-        type: 'consumable',
-        data: scannedCons,
-        message: `Znalazłeś materiał zużywalny. Kliknij poniżej, aby otworzyć edycję.`
-      });
-      setScanIdInput('');
-      return;
-    }
-
-    setScanError(`Nie znaleziono kodu: ${rawInput} w magazynie.`);
-  };
-
-  const triggerScanEdit = () => {
-    if (!scanResult) return;
-    if (scanResult.type === 'item') {
-      openEditItemModal(scanResult.data);
-    } else {
-      openEditConsumableModal(scanResult.data);
-    }
-    setScanResult(null);
-  };
-
   // Helper to resolve location container details
   const getLocationDetails = (locId: number | null) => {
     if (!locId) return { name: 'Brak przypisania', room: null, responsible: null };
@@ -1177,6 +1034,8 @@ export default function MagazynPage() {
             </button>
           )}
 
+          <ScannerButton onScan={handleBarcodeScan} />
+
           <button
             onClick={() => setIsLocationsModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 hover:border-zinc-700 active:scale-95 transition-all duration-150"
@@ -1204,9 +1063,8 @@ export default function MagazynPage() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="w-full space-y-6">
         {/* Main Controls & Filters */}
-        <div className="lg:col-span-2 space-y-6">
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row gap-4">
             {/* Search Input */}
             <div className="relative flex-1">
@@ -1259,7 +1117,7 @@ export default function MagazynPage() {
           {/* Navigation Tabs */}
           <div className="border-b border-zinc-850 flex space-x-6">
             <button
-              onClick={() => { setActiveTab('items'); setScanResult(null); }}
+              onClick={() => { setActiveTab('items'); }}
               className={`pb-3 text-sm font-semibold border-b-2 transition-all duration-300 flex items-center gap-2 ${
                 activeTab === 'items'
                   ? 'border-blue-500 text-blue-400'
@@ -1270,7 +1128,7 @@ export default function MagazynPage() {
               Sprzęt Trwały ({filteredItems.length})
             </button>
             <button
-              onClick={() => { setActiveTab('consumables'); setScanResult(null); }}
+              onClick={() => { setActiveTab('consumables'); }}
               className={`pb-3 text-sm font-semibold border-b-2 transition-all duration-300 flex items-center gap-2 ${
                 activeTab === 'consumables'
                   ? 'border-blue-500 text-blue-400'
@@ -1545,80 +1403,6 @@ export default function MagazynPage() {
           </div>
         </div>
 
-        {/* Side Panel: QR Mock Scanner */}
-        <div className="space-y-6">
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                <QrCode className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white text-md">Skaner kodów</h3>
-                <p className="text-zinc-500 text-xs mt-0.5">Skanuj kody, aby natychmiast edytować pozycje</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleScan} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Wpisz ID przedmiotu
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="np. 101 lub 201"
-                    value={scanIdInput}
-                    onChange={(e) => setScanIdInput(e.target.value)}
-                    className="flex-1 px-3.5 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500/50"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-500 text-black hover:bg-blue-400 font-semibold text-sm rounded-lg active:scale-95 transition-all duration-150"
-                  >
-                    Skanuj
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            {/* Scan Error Message */}
-            {scanError && (
-              <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-400 text-xs flex gap-2 animate-in fade-in duration-200">
-                <AlertCircle className="h-4.5 w-4.5 shrink-0 text-rose-500" />
-                <span>{scanError}</span>
-              </div>
-            )}
-
-            {/* Scan Success Indicator with Edit Modal trigger */}
-            {scanResult && (
-              <div className="p-4 rounded-lg border border-blue-500/25 bg-blue-500/5 space-y-4 animate-in fade-in duration-200">
-                <div className="flex gap-2 text-blue-400 text-xs font-bold items-center">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500" />
-                  <span>{scanResult.message}</span>
-                </div>
-                <div className="bg-zinc-950/60 p-3 rounded border border-zinc-800/80 space-y-1.5 text-xs text-zinc-400">
-                  <div className="font-mono text-zinc-500">ID: #{scanResult.data.id}</div>
-                  <div className="text-sm font-semibold text-white">{scanResult.data.name}</div>
-                  <div>Opiekun: {scanResult.data.responsible_person || 'brak'}</div>
-                  <div>Pojemnik: {getLocationDetails(scanResult.data.location_id).name}</div>
-                </div>
-                <button
-                  onClick={triggerScanEdit}
-                  className="w-full py-2 bg-blue-500 hover:bg-blue-400 text-black font-bold text-sm rounded-lg shadow active:scale-95 transition-all duration-150"
-                >
-                  Otwórz Edycję Zasobu
-                </button>
-              </div>
-            )}
-
-            <div className="text-zinc-550 text-xs leading-relaxed border-t border-zinc-800/80 pt-4">
-              <span className="font-semibold text-zinc-400">Instrukcja:</span> Wpisz <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">101</code> do <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">104</code> dla narzędzi trwałych, lub <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">201</code> do <code className="bg-zinc-950 px-1 py-0.5 rounded text-zinc-300 font-mono text-[10px]">204</code> dla materiałów, aby sprawdzić zachowanie skanera.
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* --- MODALS SECTION WITH ANIMATIONS --- */}
       {isLocationsModalOpen && (() => {
         const filteredLocsForModal = locations.filter(loc => {
@@ -1770,189 +1554,27 @@ export default function MagazynPage() {
             </div>
           </div>
         );
-      })()}        {/* 2. Modal: Add/Edit Item */}
+      })()}
+
+      {/* 2. Modal: Add/Edit Item */}
       {isItemModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-          <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Package className="h-5 w-5 text-blue-400" />
-                {editingItem ? 'Edytuj Przedmiot Trwały' : 'Dodaj Przedmiot Trwały'}
-              </h3>
-              <button 
-                onClick={() => setIsItemModalOpen(false)}
-                className="text-zinc-455 hover:text-white transition-colors active:scale-95 duration-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleItemSubmit} className="p-6 md:p-8 space-y-5">
-              {/* Item Name */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Nazwa przedmiotu / narzędzia
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
-                    <Package className="w-5 h-5 block shrink-0" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="np. Wkrętarka DeWalt 18V"
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Item ID / SKU */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5 flex justify-between items-center">
-                  <span>ID przedmiotu (kod QR / SKU)</span>
-                  <span className="text-[10px] text-zinc-500 font-normal lowercase font-sans">format: I-KOD-0000</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
-                    <QrCode className="w-5 h-5 block shrink-0" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingItem}
-                    placeholder="Wybierz kategorię, aby wygenerować ID lub wpisz ręcznie..."
-                    value={itemIdInput}
-                    onChange={(e) => setItemIdInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              {/* Location Select (SearchableSelect component) */}
-              <div>
-                <SearchableSelect
-                  options={locations}
-                  value={itemLocId}
-                  onChange={handleItemLocChange}
-                  label="Pojemnik / Szafa"
-                  placeholder="Wyszukaj szafę lub pokój..."
-                  searchLabel="Filtrowanie pojemników..."
-                  icon={Boxes}
-                />
-              </div>
-
-              {/* Category Select (SearchableSelect component) */}
-              <div>
-                <SearchableSelect
-                  options={categories}
-                  value={itemCategoryId}
-                  onChange={handleItemCategoryChange}
-                  label="Kategoria"
-                  placeholder="Wyszukaj lub wybierz kategorię..."
-                  searchLabel="Filtrowanie kategorii..."
-                  icon={Tag}
-                />
-              </div>
-
-              {/* Responsible Person */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Opiekun / Osoba odpowiedzialna
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
-                    <User className="w-5 h-5 block shrink-0" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Imię i nazwisko"
-                    value={itemResponsible}
-                    onChange={(e) => setItemResponsible(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Shop Link */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Link do sklepu (opcjonalnie)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
-                    <ExternalLink className="w-5 h-5 block shrink-0" />
-                  </span>
-                  <input
-                    type="url"
-                    placeholder="https://allegro.pl/..."
-                    value={itemLink}
-                    onChange={(e) => setItemLink(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Status Select */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Status sprzętu
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-400 pointer-events-none">
-                    <Settings className="w-5 h-5 block shrink-0" />
-                  </span>
-                  <select
-                    value={itemStatus}
-                    onChange={(e) => setItemStatus(e.target.value as any)}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm appearance-none bg-none"
-                  >
-                    <option value="in_workshop" className="bg-zinc-950 text-zinc-250">W warsztacie</option>
-                    <option value="assigned_to_event" className="bg-zinc-950 text-zinc-250">Przypisany na wyjazd</option>
-                    <option value="packed" className="bg-zinc-950 text-zinc-250">Spakowany do skrzyni</option>
-                  </select>
-                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-between items-center pt-4 border-t border-zinc-805/80 mt-4">
-                {editingItem ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteItem(editingItem.id)}
-                    disabled={modalLoading}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-rose-500/10 text-rose-400 border border-rose-500/25 hover:bg-rose-500/20 active:scale-95 transition-all font-semibold"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Usuń z bazy
-                  </button>
-                ) : (
-                  <div />
-                )}
-                
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsItemModalOpen(false)}
-                    className="px-4 py-2 rounded-lg text-sm bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
-                  >
-                    Anuluj
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={modalLoading}
-                    className="px-5 py-2 rounded-lg text-sm bg-blue-500 text-black font-bold hover:bg-blue-400 transition-colors disabled:opacity-50"
-                  >
-                    Zapisz
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ItemEditModal
+          isOpen={isItemModalOpen}
+          onClose={() => setIsItemModalOpen(false)}
+          editingItem={editingItem}
+          locations={locations}
+          categories={categories}
+          isDemoMode={isDemoMode}
+          onSave={fetchData}
+          itemsList={items}
+          onSaveDemo={(item, isEdit) => {
+            if (isEdit) {
+              setItems(prev => prev.map(i => i.id === item.id ? item : i));
+            } else {
+              setItems(prev => [...prev, item]);
+            }
+          }}
+        />
       )}
 
       {/* 3. Modal: Add/Edit Consumable */}
@@ -2316,5 +1938,17 @@ export default function MagazynPage() {
       )}
 
     </div>
+  );
+}
+
+export default function MagazynPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+        <div className="text-zinc-550 animate-pulse text-xs font-semibold">Ładowanie magazynu...</div>
+      </div>
+    }>
+      <MagazynPageContent />
+    </Suspense>
   );
 }
