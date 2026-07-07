@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 
 interface SelectOption {
@@ -33,6 +34,37 @@ export default function SearchableSelect({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOption, setSelectedOption] = useState<SelectOption | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const updateCoords = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      window.addEventListener('resize', updateCoords);
+      window.addEventListener('scroll', updateCoords, true);
+    }
+    return () => {
+      window.removeEventListener('resize', updateCoords);
+      window.removeEventListener('scroll', updateCoords, true);
+    };
+  }, [isOpen]);
 
   // Sync selected option when value or options change
   useEffect(() => {
@@ -48,7 +80,12 @@ export default function SearchableSelect({
   // Close dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && 
+        !containerRef.current.contains(target) &&
+        !(dropdownRef.current && dropdownRef.current.contains(target))
+      ) {
         setIsOpen(false);
         // Reset query text to show selected option name
         setSearchQuery(selectedOption ? selectedOption.name : '');
@@ -128,9 +165,18 @@ export default function SearchableSelect({
           </div>
         </div>
 
-        {/* Dropdown Options List */}
-        {isOpen && (
-          <div className="absolute z-50 w-full mt-1.5 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-md shadow-2xl overflow-hidden animate-in fade-in duration-200">
+        {/* Dropdown Options List (Rendered via React Portal to prevent overflow cuts inside modals) */}
+        {isOpen && isMounted && coords && createPortal(
+          <div 
+            ref={dropdownRef}
+            style={{
+              position: 'absolute',
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              width: `${coords.width}px`
+            }}
+            className="z-[9999] mt-1.5 rounded-xl border border-zinc-800 bg-zinc-950/98 backdrop-blur-md shadow-2xl overflow-hidden animate-in fade-in duration-200"
+          >
             {/* Search query header within dropdown */}
             <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-zinc-900 bg-zinc-950 text-zinc-500">
               <Search className="h-3.5 w-3.5" />
@@ -174,7 +220,8 @@ export default function SearchableSelect({
                 })
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>

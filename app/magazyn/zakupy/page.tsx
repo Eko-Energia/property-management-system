@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   supabase, 
   DatabaseConsumable, 
@@ -48,6 +48,8 @@ export default function ZakupyPage() {
   // Filter for shopping list
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'ordered' | 'received'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const modalHistoryActiveRef = useRef<boolean>(false);
 
   // 1. Restock Modal state
   const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
@@ -152,6 +154,49 @@ export default function ZakupyPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Scroll Lock & Back Button Interceptor for Modals
+  useEffect(() => {
+    const isAnyModalOpen = isRestockModalOpen || isNewRequestModalOpen || isReceiveModalOpen;
+    if (!isAnyModalOpen) return;
+
+    // Lock background scroll
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Intercept back button
+    window.history.pushState({ modalOpen: true }, '', window.location.href);
+    modalHistoryActiveRef.current = true;
+
+    const handlePopState = () => {
+      modalHistoryActiveRef.current = false; // Already popped by the browser back navigation
+      
+      setIsRestockModalOpen(false);
+      setSelectedRestockItem(null);
+
+      setIsNewRequestModalOpen(false);
+      setNewReqName('');
+      setNewReqQty('1');
+      setNewReqShopLink('');
+      setNewReqPrice('');
+      setNewReqSuggestedBy('');
+      setNewReqCategoryId('');
+
+      setIsReceiveModalOpen(false);
+      setSelectedReceiveItem(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('popstate', handlePopState);
+      if (modalHistoryActiveRef.current) {
+        modalHistoryActiveRef.current = false;
+        window.history.back();
+      }
+    };
+  }, [isRestockModalOpen, isNewRequestModalOpen, isReceiveModalOpen]);
 
   // --- RESTOCK ALERTS HANDLERS ---
   const openRestockModal = (item: DatabaseConsumable) => {
@@ -745,69 +790,129 @@ export default function ZakupyPage() {
             </div>
           </div>
         ) : (
-          <div className="bg-zinc-900/20 border border-zinc-850 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="py-3 px-6 w-20">ID</th>
-                    <th className="py-3 px-6">Nazwa materiału</th>
-                    <th className="py-3 px-6 text-center">Aktualny stan</th>
-                    <th className="py-3 px-6 text-center">Stan minimalny</th>
-                    <th className="py-3 px-6 text-center">Brakująca ilość</th>
-                    <th className="py-3 px-6 text-center">Sklep</th>
-                    <th className="py-3 px-6 text-right">Akcja</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
-                  {lowStockItems.map((item) => {
-                    const missingQty = Number(item.min_quantity) - Number(item.quantity_stored);
-                    return (
-                      <tr key={`alert-${item.id}`} className="hover:bg-zinc-900/20 transition-colors">
-                        <td className="py-3 px-6 font-mono text-xs text-zinc-500">#C{item.id}</td>
-                        <td className="py-3 px-6 font-semibold text-zinc-100">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span>{item.name}</span>
-                            {renderCategoryBadge(item.category_id)}
-                          </div>
-                        </td>
-                        <td className="py-3 px-6 text-center font-mono text-rose-400 font-bold bg-rose-500/[0.02]">
-                          {item.quantity_stored}
-                        </td>
-                        <td className="py-3 px-6 text-center font-mono text-zinc-500">{item.min_quantity}</td>
-                        <td className="py-3 px-6 text-center font-mono font-bold text-amber-500">
-                          -{missingQty}
-                        </td>
-                        <td className="py-3 px-6 text-center">
-                          {item.shop_link ? (
-                            <a
-                              href={item.shop_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 hover:text-white transition-all"
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-zinc-900/20 border border-zinc-850 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                      <th className="py-3 px-6 w-20">ID</th>
+                      <th className="py-3 px-6">Nazwa materiału</th>
+                      <th className="py-3 px-6 text-center">Aktualny stan</th>
+                      <th className="py-3 px-6 text-center">Stan minimalny</th>
+                      <th className="py-3 px-6 text-center">Brakująca ilość</th>
+                      <th className="py-3 px-6 text-center">Sklep</th>
+                      <th className="py-3 px-6 text-right">Akcja</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
+                    {lowStockItems.map((item) => {
+                      const missingQty = Number(item.min_quantity) - Number(item.quantity_stored);
+                      return (
+                        <tr key={`alert-${item.id}`} className="hover:bg-zinc-900/20 transition-colors">
+                          <td className="py-3 px-6 font-mono text-xs text-zinc-500">#C{item.id}</td>
+                          <td className="py-3 px-6 font-semibold text-zinc-100">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span>{item.name}</span>
+                              {renderCategoryBadge(item.category_id)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-6 text-center font-mono text-rose-400 font-bold bg-rose-500/[0.02]">
+                            {item.quantity_stored}
+                          </td>
+                          <td className="py-3 px-6 text-center font-mono text-zinc-500">{item.min_quantity}</td>
+                          <td className="py-3 px-6 text-center font-mono font-bold text-amber-500">
+                            -{missingQty}
+                          </td>
+                          <td className="py-3 px-6 text-center">
+                            {item.shop_link ? (
+                              <a
+                                href={item.shop_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 hover:text-white transition-all"
+                              >
+                                Kup <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span className="text-xs text-zinc-600">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-6 text-right">
+                            <button
+                              onClick={() => openRestockModal(item)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 transition-all font-semibold"
                             >
-                              Kup <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ) : (
-                            <span className="text-xs text-zinc-600">—</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-6 text-right">
-                          <button
-                            onClick={() => openRestockModal(item)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 transition-all font-semibold"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Uzupełnij stan
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                              <Plus className="h-3.5 w-3.5" />
+                              Uzupełnij stan
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+
+            {/* Mobile Card Layout */}
+            <div className="block md:hidden space-y-3">
+              {lowStockItems.map((item) => {
+                const missingQty = Number(item.min_quantity) - Number(item.quantity_stored);
+                return (
+                  <div key={`alert-card-${item.id}`} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="font-mono text-[10px] text-zinc-550">#C{item.id}</div>
+                        <div className="font-bold text-zinc-100 text-sm leading-tight">{item.name}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {renderCategoryBadge(item.category_id)}
+                        </div>
+                      </div>
+                      {item.shop_link ? (
+                        <a
+                          href={item.shop_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 hover:text-white transition-all shrink-0 active:scale-95"
+                        >
+                          Kup <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-zinc-600 shrink-0">—</span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 py-2 border-t border-b border-zinc-850/50 text-xs font-mono text-center">
+                      <div>
+                        <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Stan</div>
+                        <div className="text-rose-400 font-bold">{item.quantity_stored}</div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Min</div>
+                        <div className="text-zinc-400">{item.min_quantity}</div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Brak</div>
+                        <div className="text-amber-500 font-bold">-{missingQty}</div>
+                      </div>
+                    </div>
+
+                    <div className="pt-1">
+                      <button
+                        onClick={() => openRestockModal(item)}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 transition-all font-semibold active:scale-[0.98]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Uzupełnij stan
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 
@@ -898,139 +1003,263 @@ export default function ZakupyPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-zinc-900/20 border border-zinc-850 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
-                    <th className="py-3.5 px-6 w-20">ID</th>
-                    <th className="py-3.5 px-6">Nazwa pozycji</th>
-                    <th className="py-3.5 px-6">Typ</th>
-                    <th className="py-3.5 px-6 text-center">Ilość</th>
-                    <th className="py-3.5 px-6 text-center">Szac. Koszt</th>
-                    <th className="py-3.5 px-6">Zgłaszający</th>
-                    <th className="py-3.5 px-6 text-center">Status</th>
-                    <th className="py-3.5 px-6 text-right">Akcje</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
-                  {filteredShoppingList.map((item) => {
-                    return (
-                      <tr key={`shop-${item.id}`} className="hover:bg-zinc-900/20 transition-colors group">
-                        <td className="py-4 px-6 font-mono text-xs text-zinc-500">#{item.id}</td>
-                        <td className="py-4 px-6">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-zinc-100">{item.name}</span>
-                              {renderCategoryBadge(item.category_id)}
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-zinc-900/20 border border-zinc-850 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                      <th className="py-3.5 px-6 w-20">ID</th>
+                      <th className="py-3.5 px-6">Nazwa pozycji</th>
+                      <th className="py-3.5 px-6">Typ</th>
+                      <th className="py-3.5 px-6 text-center">Ilość</th>
+                      <th className="py-3.5 px-6 text-center">Szac. Koszt</th>
+                      <th className="py-3.5 px-6">Zgłaszający</th>
+                      <th className="py-3.5 px-6 text-center">Status</th>
+                      <th className="py-3.5 px-6 text-right">Akcje</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
+                    {filteredShoppingList.map((item) => {
+                      return (
+                        <tr key={`shop-${item.id}`} className="hover:bg-zinc-900/20 transition-colors group">
+                          <td className="py-4 px-6 font-mono text-xs text-zinc-500">#{item.id}</td>
+                          <td className="py-4 px-6">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-zinc-100">{item.name}</span>
+                                {renderCategoryBadge(item.category_id)}
+                              </div>
+                              {item.shop_link && (
+                                <a
+                                  href={item.shop_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-medium self-start"
+                                >
+                                  Link do sklepu <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
                             </div>
-                            {item.shop_link && (
-                              <a
-                                href={item.shop_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-medium self-start"
-                              >
-                                Link do sklepu <ExternalLink className="h-3 w-3" />
-                              </a>
+                          </td>
+                          <td className="py-4 px-6">
+                            {item.type === 'item' ? (
+                              <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                Sprzęt trwały
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                Zużywalne
+                              </span>
                             )}
-                          </div>
-                        </td>
-                        <td className="py-4 px-6">
+                          </td>
+                          <td className="py-4 px-6 text-center font-mono font-medium text-white">{item.quantity} szt.</td>
+                          <td className="py-4 px-6 text-center font-mono text-zinc-400">
+                            {item.price_estimate ? `${item.price_estimate} zł` : '—'}
+                          </td>
+                          <td className="py-4 px-6 text-zinc-400">{item.suggested_by || 'Brak'}</td>
+                          <td className="py-4 px-6 text-center">
+                            {item.status === 'pending' && (
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                Oczekuje
+                              </span>
+                            )}
+                            {item.status === 'ordered' && (
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                Zamówione
+                              </span>
+                            )}
+                            {item.status === 'received' && (
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                Odebrane
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {actionLoading === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-zinc-500 mx-2" />
+                              ) : (
+                                <>
+                                  {/* Status cycle controls */}
+                                  {item.status === 'pending' && (
+                                    <button
+                                      onClick={() => handleUpdateStatus(item, 'ordered')}
+                                      className="px-2.5 py-1.5 rounded-lg text-xs bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-blue-950 hover:text-blue-300 hover:border-blue-800 transition-all font-medium"
+                                      title="Zmień status na: Zamówione"
+                                    >
+                                      Zamówiono
+                                    </button>
+                                  )}
+                                  {item.status === 'ordered' && (
+                                    <button
+                                      onClick={() => handleUpdateStatus(item, 'received')}
+                                      className="px-2.5 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-950 hover:text-blue-300 hover:border-blue-800 transition-all font-medium"
+                                      title="Zmień status na: Odebrane"
+                                    >
+                                      Odebrano
+                                    </button>
+                                  )}
+                                  {item.status === 'received' && (
+                                    <button
+                                      onClick={() => openReceiveModal(item)}
+                                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-blue-500 text-black hover:bg-blue-400 transition-all font-bold"
+                                      title="Przyjmij do magazynu"
+                                    >
+                                      <PackageCheck className="h-3.5 w-3.5" />
+                                      Przyjmij
+                                    </button>
+                                  )}
+
+                                  {/* Cancel/Delete request */}
+                                  <button
+                                    onClick={() => handleDeleteRequest(item.id)}
+                                    className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors md:opacity-0 md:group-hover:opacity-100"
+                                    title="Usuń wniosek"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile Card Layout */}
+            <div className="block md:hidden space-y-3">
+              {filteredShoppingList.map((item) => {
+                return (
+                  <div key={`shop-card-${item.id}`} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="font-mono text-[10px] text-zinc-550">#{item.id}</div>
+                        <div className="font-bold text-zinc-100 text-sm leading-tight">{item.name}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {renderCategoryBadge(item.category_id)}
                           {item.type === 'item' ? (
-                            <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                            <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
                               Sprzęt trwały
                             </span>
                           ) : (
-                            <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                            <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                               Zużywalne
                             </span>
                           )}
-                        </td>
-                        <td className="py-4 px-6 text-center font-mono font-medium text-white">{item.quantity} szt.</td>
-                        <td className="py-4 px-6 text-center font-mono text-zinc-400">
-                          {item.price_estimate ? `${item.price_estimate} zł` : '—'}
-                        </td>
-                        <td className="py-4 px-6 text-zinc-400">{item.suggested_by || 'Brak'}</td>
-                        <td className="py-4 px-6 text-center">
-                          {item.status === 'pending' && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              Oczekuje
-                            </span>
-                          )}
-                          {item.status === 'ordered' && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                              Zamówione
-                            </span>
-                          )}
-                          {item.status === 'received' && (
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                              Odebrane
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {actionLoading === item.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-zinc-500 mx-2" />
-                            ) : (
-                              <>
-                                {/* Status cycle controls */}
-                                {item.status === 'pending' && (
-                                  <button
-                                    onClick={() => handleUpdateStatus(item, 'ordered')}
-                                    className="px-2.5 py-1.5 rounded-lg text-xs bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-blue-950 hover:text-blue-300 hover:border-blue-800 transition-all font-medium"
-                                    title="Zmień status na: Zamówione"
-                                  >
-                                    Zamówiono
-                                  </button>
-                                )}
-                                {item.status === 'ordered' && (
-                                  <button
-                                    onClick={() => handleUpdateStatus(item, 'received')}
-                                    className="px-2.5 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-950 hover:text-blue-300 hover:border-blue-800 transition-all font-medium"
-                                    title="Zmień status na: Odebrane"
-                                  >
-                                    Odebrano
-                                  </button>
-                                )}
-                                {item.status === 'received' && (
-                                  <button
-                                    onClick={() => openReceiveModal(item)}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-blue-500 text-black hover:bg-blue-400 transition-all font-bold"
-                                    title="Przyjmij do magazynu"
-                                  >
-                                    <PackageCheck className="h-3.5 w-3.5" />
-                                    Przyjmij
-                                  </button>
-                                )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {item.status === 'pending' && (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            Oczekuje
+                          </span>
+                        )}
+                        {item.status === 'ordered' && (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            Zamówione
+                          </span>
+                        )}
+                        {item.status === 'received' && (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            Odebrane
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                                {/* Cancel/Delete request */}
-                                <button
-                                  onClick={() => handleDeleteRequest(item.id)}
-                                  className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors md:opacity-0 md:group-hover:opacity-100"
-                                  title="Usuń wniosek"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </>
+                    {item.shop_link && (
+                      <div className="pt-0.5">
+                        <a
+                          href={item.shop_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-350 font-medium active:scale-95"
+                        >
+                          Link do sklepu <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-2 py-2 border-t border-b border-zinc-850/50 text-xs font-mono text-center">
+                      <div>
+                        <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Ilość</div>
+                        <div className="text-white font-medium">{item.quantity} szt.</div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Koszt</div>
+                        <div className="text-zinc-300">{item.price_estimate ? `${item.price_estimate} zł` : '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Zgłosił</div>
+                        <div className="text-zinc-400 truncate max-w-[80px] mx-auto" title={item.suggested_by || ''}>
+                          {item.suggested_by || 'Brak'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <div>
+                        <button
+                          onClick={() => handleDeleteRequest(item.id)}
+                          className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border border-zinc-805 active:scale-90"
+                          title="Usuń wniosek"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {actionLoading === item.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-zinc-500 mx-2" />
+                        ) : (
+                          <>
+                            {item.status === 'pending' && (
+                              <button
+                                onClick={() => handleUpdateStatus(item, 'ordered')}
+                                className="px-3 py-1.5 rounded-lg text-xs bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-blue-950 hover:text-blue-300 hover:border-blue-800 transition-all font-semibold active:scale-95"
+                              >
+                                Zamówiono
+                              </button>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            {item.status === 'ordered' && (
+                              <button
+                                onClick={() => handleUpdateStatus(item, 'received')}
+                                className="px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-950 hover:text-blue-300 hover:border-blue-800 transition-all font-semibold active:scale-95"
+                              >
+                                Odebrano
+                              </button>
+                            )}
+                            {item.status === 'received' && (
+                              <button
+                                onClick={() => openReceiveModal(item)}
+                                className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs bg-blue-500 text-black hover:bg-blue-400 transition-all font-bold shadow-md shadow-blue-500/10 active:scale-95"
+                              >
+                                <PackageCheck className="h-3.5 w-3.5" />
+                                Przyjmij
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          </>
         )}
       </div>
 
       {/* MODAL 1: RESTOCK CONUSMABLE ALERT */}
       {isRestockModalOpen && selectedRestockItem && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-xl shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-[96%] max-w-xl md:w-full mx-auto my-auto shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-zinc-850 pb-4 mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-blue-400" />
@@ -1097,7 +1326,7 @@ export default function ZakupyPage() {
       {/* MODAL 2: NEW PURCHASE REQUEST */}
       {isNewRequestModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-xl shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-[96%] max-w-xl md:w-full mx-auto my-auto shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-zinc-855 pb-4 mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5 text-blue-400" />
@@ -1266,7 +1495,7 @@ export default function ZakupyPage() {
       {/* MODAL 3: RECEIVE PURCHASED RESOURCE INTO WAREHOUSE */}
       {isReceiveModalOpen && selectedReceiveItem && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-xl shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-[96%] max-w-xl md:w-full mx-auto my-auto shadow-2xl p-6 md:p-8 relative overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-zinc-855 pb-4 mb-4">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <PackageOpen className="h-5 w-5 text-blue-400" />

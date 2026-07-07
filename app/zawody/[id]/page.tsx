@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   supabase, 
   DatabaseEvent, 
@@ -13,6 +13,8 @@ import {
   DatabaseCategory
 } from '@/utils/supabase/client';
 import ItemEditModal from '@/app/components/ItemEditModal';
+import SearchableSelect from '@/app/components/SearchableSelect';
+import { Loader2 } from 'lucide-react';
 
 interface ItemWithLocation extends DatabaseItem {
   locations?: {
@@ -39,7 +41,8 @@ import {
   LayoutDashboard,
   Check,
   Search,
-  ArrowUpDown
+  ArrowUpDown,
+  Tag
 } from 'lucide-react';
 import ScannerButton from '@/app/components/ScannerButton';
 
@@ -52,7 +55,9 @@ interface ExtendedConsumableItem {
   locationId: number;
 }
 
-export default function EventPackingPage() {
+function EventPackingPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams();
   const eventId = parseInt(params.id as string);
 
@@ -85,6 +90,7 @@ export default function EventPackingPage() {
   const [categories, setCategories] = useState<DatabaseCategory[]>([]);
   const [isItemModalOpen, setIsItemModalOpen] = useState<boolean>(false);
   const [selectedItemForModal, setSelectedItemForModal] = useState<ItemWithLocation | null>(null);
+  const modalHistoryActiveRef = useRef<boolean>(false);
   
   // Custom states for Web Haptics and Toast Notifications
   const [recentlyUpdatedId, setRecentlyUpdatedId] = useState<string | null>(null);
@@ -101,6 +107,37 @@ export default function EventPackingPage() {
     }, 3000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Support open parameter deep-linking from QR code scans
+  useEffect(() => {
+    if (loading) return;
+
+    const openSku = searchParams.get('open');
+    if (!openSku) return;
+
+    const upperSku = openSku.toUpperCase().trim();
+
+    // Check in assigned items list
+    const matchedItem = items.find(i => i.id.toUpperCase() === upperSku);
+    if (matchedItem) {
+      openEditItemModal(matchedItem);
+      // Clean query parameter from URL using router
+      const cleanPath = window.location.pathname;
+      router.replace(cleanPath);
+      return;
+    }
+
+    // Check in workshop items list
+    const matchedWorkshopItem = workshopItems.find(i => i.id.toUpperCase() === upperSku);
+    if (matchedWorkshopItem) {
+      openEditItemModal(matchedWorkshopItem);
+      const cleanPath = window.location.pathname;
+      router.replace(cleanPath);
+      return;
+    }
+  }, [loading, items, workshopItems, searchParams, router]);
+
+
 
   // Synchronized Refs for thread-safe optimistic updates
   const consumablesListRef = useRef<ExtendedConsumableItem[]>([]);
@@ -153,6 +190,7 @@ export default function EventPackingPage() {
   const [isAssignItemModalOpen, setIsAssignItemModalOpen] = useState<boolean>(false);
   const [assignItemId, setAssignItemId] = useState<string>('');
   const [assignBoxId, setAssignBoxId] = useState<string>('');
+  const [selectedAssignCategoryId, setSelectedAssignCategoryId] = useState<string>('all');
   
   // 5. Add Requirement Modal
   const [isAddReqModalOpen, setIsAddReqModalOpen] = useState<boolean>(false);
@@ -160,6 +198,42 @@ export default function EventPackingPage() {
   const [reqBoxId, setReqBoxId] = useState<string>('');
   const [reqQtyVal, setReqQtyVal] = useState<string>('5');
   const [reqResponsible, setReqResponsible] = useState<string>('');
+
+  // Scroll Lock & Back Button Interceptor for Modals
+  useEffect(() => {
+    const isAnyModalOpen = !!packingModal || isBoxEditModalOpen || isReqEditModalOpen || isAssignItemModalOpen || isAddReqModalOpen || isItemModalOpen;
+    if (!isAnyModalOpen) return;
+
+    // Lock background scroll
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Intercept back button
+    window.history.pushState({ modalOpen: true }, '', window.location.href);
+    modalHistoryActiveRef.current = true;
+
+    const handlePopState = () => {
+      modalHistoryActiveRef.current = false; // Already popped by the browser back navigation
+      
+      setPackingModal(null);
+      setIsBoxEditModalOpen(false);
+      setIsReqEditModalOpen(false);
+      setIsAssignItemModalOpen(false);
+      setIsAddReqModalOpen(false);
+      setIsItemModalOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('popstate', handlePopState);
+      if (modalHistoryActiveRef.current) {
+        modalHistoryActiveRef.current = false;
+        window.history.back();
+      }
+    };
+  }, [packingModal, isBoxEditModalOpen, isReqEditModalOpen, isAssignItemModalOpen, isAddReqModalOpen, isItemModalOpen]);
 
 
 
@@ -1129,6 +1203,11 @@ export default function EventPackingPage() {
     return 0;
   });
 
+  const filteredWorkshopItems = workshopItems.filter(item => {
+    if (selectedAssignCategoryId === 'all') return true;
+    return item.category_id?.toString() === selectedAssignCategoryId;
+  });
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
       <div className="space-y-2">
@@ -1381,8 +1460,13 @@ export default function EventPackingPage() {
                 {activeTab === 'items' ? (
                   <button
                     type="button"
-                    onClick={() => setIsAssignItemModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-indigo-400 hover:bg-indigo-350 rounded-lg active:scale-95 transition-all shadow-sm shrink-0"
+                    onClick={() => {
+                      setIsAssignItemModalOpen(true);
+                      setAssignItemId('');
+                      setAssignBoxId('');
+                      setSelectedAssignCategoryId('all');
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-indigo-400 hover:bg-indigo-350 rounded-lg active:scale-95 transition-all shadow-sm shrink-0 whitespace-nowrap"
                   >
                     <Plus className="h-3.5 w-3.5" /> Przypisz z warsztatu
                   </button>
@@ -1398,9 +1482,9 @@ export default function EventPackingPage() {
                         setReqConsumableId(globalConsumables[0].id.toString());
                       }
                     }}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-teal-400 hover:bg-teal-355 rounded-lg active:scale-95 transition-all shadow-sm shrink-0"
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-black bg-teal-400 hover:bg-teal-355 rounded-lg active:scale-95 transition-all shadow-sm shrink-0 whitespace-nowrap"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Dodaj zapotrzebowanie
+                    <Plus className="h-3.5 w-3.5" /> Zapotrzebowanie
                   </button>
                 )}
               </div>
@@ -1673,8 +1757,11 @@ export default function EventPackingPage() {
       </div>
 
       {packingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setPackingModal(null); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        >
+          <div className="w-[96%] max-w-md md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="p-6 border-b border-zinc-800 bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-blue-400" />
@@ -1745,8 +1832,11 @@ export default function EventPackingPage() {
       )}
 
       {isBoxEditModalOpen && editingBox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setIsBoxEditModalOpen(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+        >
+          <div className="w-[96%] max-w-md md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Settings className="h-5 w-5 text-blue-400" />
@@ -1834,8 +1924,11 @@ export default function EventPackingPage() {
       )}
 
       {isReqEditModalOpen && editingReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setIsReqEditModalOpen(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+        >
+          <div className="w-[96%] max-w-md md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-blue-400" />
@@ -1934,8 +2027,11 @@ export default function EventPackingPage() {
       )}
 
       {isAssignItemModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAssignItemModalOpen(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+        >
+          <div className="w-[96%] max-w-md md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Package className="h-5 w-5 text-indigo-400" />
@@ -1961,53 +2057,73 @@ export default function EventPackingPage() {
                   alert('Wybierz sprzęt oraz docelową skrzynię!');
                 }
               }} 
-              className="p-6 space-y-4"
+              className="p-6 space-y-5"
             >
+              {/* Category Filter */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Wybierz narzędzie z warsztatu
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 text-zinc-550" />
+                  Kategoria narzędzia
                 </label>
+                <div className="relative">
+                  <select
+                    value={selectedAssignCategoryId}
+                    onChange={(e) => {
+                      setSelectedAssignCategoryId(e.target.value);
+                      setAssignItemId('');
+                    }}
+                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none text-sm"
+                  >
+                    <option value="all" className="bg-zinc-950 text-zinc-200">Wszystkie kategorie (bez filtra)</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id} className="bg-zinc-950 text-zinc-200">
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none border-l border-t border-zinc-500 h-2 w-2 transform rotate-135" />
+                </div>
+              </div>
+
+              {/* Tool Selection (SearchableSelect) */}
+              <div>
                 {workshopItems.length === 0 ? (
                   <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
                     Brak wolnych narzędzi w warsztacie. Wszystkie są przypisane do wydarzeń!
                   </div>
+                ) : filteredWorkshopItems.length === 0 ? (
+                  <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
+                    Brak wolnych narzędzi w warsztacie dla wybranej kategorii.
+                  </div>
                 ) : (
-                  <select
+                  <SearchableSelect
+                    options={filteredWorkshopItems}
                     value={assignItemId}
-                    onChange={(e) => setAssignItemId(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
-                  >
-                    <option value="" className="bg-zinc-950 text-zinc-200">-- Wybierz narzędzie --</option>
-                    {workshopItems.map(item => (
-                      <option key={item.id} value={item.id} className="bg-zinc-950 text-zinc-200">
-                        {item.name} (ID: #{item.id})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setAssignItemId}
+                    label="Wybierz narzędzie z warsztatu"
+                    placeholder="Wyszukaj narzędzie..."
+                    searchLabel="Filtrowanie narzędzi..."
+                    icon={Package}
+                  />
                 )}
               </div>
 
+              {/* Destination Box Selection (SearchableSelect) */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-                  Docelowa skrzynia wyjazdowa
-                </label>
                 {boxes.length === 0 ? (
                   <div className="p-3 text-xs bg-zinc-950 rounded-lg text-zinc-500 border border-zinc-800">
                     Brak skrzyń dla tego wyjazdu. Najpierw utwórz skrzynię!
                   </div>
                 ) : (
-                  <select
+                  <SearchableSelect
+                    options={boxes}
                     value={assignBoxId}
-                    onChange={(e) => setAssignBoxId(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none"
-                  >
-                    <option value="" className="bg-zinc-950 text-zinc-200">-- Wybierz skrzynię --</option>
-                    {boxes.map(box => (
-                      <option key={box.id} value={box.id} className="bg-zinc-950 text-zinc-200">{box.name}</option>
-                    ))}
-                  </select>
+                    onChange={setAssignBoxId}
+                    label="Docelowa skrzynia wyjazdowa"
+                    placeholder="Wyszukaj skrzynię..."
+                    searchLabel="Filtrowanie skrzyń..."
+                    icon={Boxes}
+                  />
                 )}
               </div>
 
@@ -2021,7 +2137,7 @@ export default function EventPackingPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={workshopItems.length === 0 || boxes.length === 0}
+                  disabled={filteredWorkshopItems.length === 0 || boxes.length === 0}
                   className="px-5 py-2 rounded-lg text-sm bg-indigo-500 text-white font-semibold hover:bg-indigo-400 transition-colors disabled:opacity-30"
                 >
                   Przypisz do wyjazdu
@@ -2061,8 +2177,11 @@ export default function EventPackingPage() {
       )}
 
       {isAddReqModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAddReqModalOpen(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+        >
+          <div className="w-[96%] max-w-md md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-teal-400" />
@@ -2192,5 +2311,18 @@ export default function EventPackingPage() {
       )}
 
     </div>
+  );
+}
+
+export default function EventPackingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
+        <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
+        <span className="text-zinc-500 text-xs font-semibold mt-2 animate-pulse">Ładowanie panelu zawodów...</span>
+      </div>
+    }>
+      <EventPackingPageContent />
+    </Suspense>
   );
 }

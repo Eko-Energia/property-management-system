@@ -85,6 +85,7 @@ export default function ItemEditModal({
     }
   }, [isOpen, editingItem]);
 
+
   const suggestNextSku = async (type: 'I' | 'C', categoryId: number | null): Promise<string> => {
     if (!categoryId) return '';
     const cat = categories.find(c => c.id === categoryId);
@@ -283,8 +284,11 @@ export default function ItemEditModal({
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-      <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
+    <div 
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200"
+    >
+      <div className="w-[96%] max-w-xl md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
         
         {/* Modal Header */}
         <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">

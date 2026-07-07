@@ -50,12 +50,52 @@ export default function ScannerButton({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [accordionOpen, setAccordionOpen] = useState(false);
+  const [isNotSecure, setIsNotSecure] = useState(false);
 
   // Dynamic host URL for instruction displays
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://nasza-domena.pl';
 
   useEffect(() => {
-    if (!isOpen || mode !== 'camera') return;
+    if (isOpen) {
+      if (typeof window !== 'undefined' && !window.isSecureContext) {
+        setIsNotSecure(true);
+        setMode('manual');
+        setHasCameraAccess(false);
+      } else {
+        setIsNotSecure(false);
+      }
+    }
+  }, [isOpen]);
+
+  // Scroll Lock & Back Button Interceptor
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Lock background scroll
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Intercept back button
+    window.history.pushState({ modalOpen: true }, '', window.location.href);
+
+    const handlePopState = () => {
+      setIsOpen(false);
+      resetModal();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('popstate', handlePopState);
+      if (window.history.state?.modalOpen) {
+        window.history.back();
+      }
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== 'camera' || (typeof window !== 'undefined' && !window.isSecureContext)) return;
 
     let html5QrCode: Html5Qrcode | null = null;
     const qrRegionId = 'qr-reader-viewport';
@@ -144,8 +184,9 @@ export default function ScannerButton({
   }, [isOpen, mode, onScan]);
 
   const resetModal = () => {
-    setMode('camera');
-    setHasCameraAccess(null);
+    const isSecure = typeof window !== 'undefined' && window.isSecureContext;
+    setMode(isSecure ? 'camera' : 'manual');
+    setHasCameraAccess(isSecure ? null : false);
     setManualInput('');
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -185,7 +226,7 @@ export default function ScannerButton({
       {/* Modal Viewport */}
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-[96%] max-w-lg md:w-full mx-auto my-auto shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
             
             {/* Modal Header */}
             <div className="p-5 border-b border-zinc-855 flex items-center justify-between">
@@ -205,6 +246,13 @@ export default function ScannerButton({
             {/* Modal Body */}
             <div className="p-5 md:p-6 space-y-5 flex-1 overflow-y-auto">
               
+              {isNotSecure && (
+                <div className="p-3.5 rounded-xl border border-amber-500/25 bg-amber-500/5 text-amber-400 text-xs flex gap-2.5 animate-in fade-in duration-200">
+                  <AlertCircle className="h-4.5 w-4.5 shrink-0 text-amber-500" />
+                  <span className="font-semibold leading-relaxed">Przeglądarka blokuje kamerę. Użyj wpisywania ręcznego.</span>
+                </div>
+              )}
+
               {/* Toggles (Only visible if camera is supported) */}
               {hasCameraAccess !== false && (
                 <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800 text-xs font-semibold">

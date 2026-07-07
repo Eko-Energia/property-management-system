@@ -4,6 +4,7 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { QrCode, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { supabase } from '@/utils/supabase/client';
 
 function ScanDispatcher() {
   const router = useRouter();
@@ -26,12 +27,39 @@ function ScanDispatcher() {
       return;
     }
 
-    // Auto-redirect to warehouse page with open parameter
-    const timer = setTimeout(() => {
-      router.push(`/magazyn?open=${cleanId}`);
-    }, 1500); // 1.5 seconds delay for premium animation feel
+    const checkAndRedirect = async () => {
+      let redirectUrl = `/magazyn?open=${cleanId}`;
 
-    return () => clearTimeout(timer);
+      // Mock data logic for offline testing/demo mode
+      const mockEventItems = ['I-NR-0102', 'I-EL-0103', 'I-NR-0105', 'I-EL-0106'];
+      if (mockEventItems.includes(cleanId)) {
+        redirectUrl = `/zawody/10?open=${cleanId}`;
+      } else if (cleanId.startsWith('I')) {
+        try {
+          const { data, error } = await supabase
+            .from('items')
+            .select('status, location_id, locations(type, event_id)')
+            .eq('id', cleanId)
+            .maybeSingle();
+
+          if (data && data.locations) {
+            const locData: any = Array.isArray(data.locations) 
+              ? data.locations[0] 
+              : data.locations;
+            if (locData && locData.type === 'event_box' && locData.event_id) {
+              redirectUrl = `/zawody/${locData.event_id}?open=${cleanId}`;
+            }
+          }
+        } catch (err) {
+          console.error('Redirect verification check failed:', err);
+        }
+      }
+
+      router.push(redirectUrl);
+    };
+
+    // Auto-redirect to resolved path instantly
+    checkAndRedirect();
   }, [router, searchParams]);
 
   return (

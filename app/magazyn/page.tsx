@@ -84,6 +84,7 @@ function MagazynPageContent() {
   const [consSortDir, setConsSortDir] = useState<'asc' | 'desc'>('asc');
 
   // --- CRUD States ---
+  const modalHistoryActiveRef = useRef<boolean>(false);
   
   // 1. Locations modal
   const [isLocationsModalOpen, setIsLocationsModalOpen] = useState<boolean>(false);
@@ -182,6 +183,46 @@ function MagazynPageContent() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Scroll Lock & Back Button Interceptor for Modals
+  useEffect(() => {
+    const isAnyModalOpen = isLocationsModalOpen || isCategoriesModalOpen || isConsumableModalOpen || isItemModalOpen;
+    if (!isAnyModalOpen) return;
+
+    // Lock background scroll
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Intercept back button
+    window.history.pushState({ modalOpen: true }, '', window.location.href);
+    modalHistoryActiveRef.current = true;
+
+    const handlePopState = () => {
+      modalHistoryActiveRef.current = false; // Already popped by the browser back navigation
+      
+      setIsLocationsModalOpen(false);
+      setLocSearchQuery('');
+      cancelEditLocation();
+
+      setIsCategoriesModalOpen(false);
+      setCatSearchQuery('');
+      cancelEditCategory();
+
+      setIsConsumableModalOpen(false);
+      setIsItemModalOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('popstate', handlePopState);
+      if (modalHistoryActiveRef.current) {
+        modalHistoryActiveRef.current = false;
+        window.history.back();
+      }
+    };
+  }, [isLocationsModalOpen, isCategoriesModalOpen, isConsumableModalOpen, isItemModalOpen]);
 
   // Support open parameter deep-linking from QR code scans
   useEffect(() => {
@@ -1016,26 +1057,6 @@ function MagazynPageContent() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-          {activeTab === 'items' ? (
-            <button
-              onClick={openAddItemModal}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-black bg-blue-500 rounded-lg hover:bg-blue-400 active:scale-95 transition-all duration-150"
-            >
-              <Plus className="h-4 w-4" />
-              Dodaj Przedmiot
-            </button>
-          ) : (
-            <button
-              onClick={openAddConsumableModal}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-black bg-blue-500 rounded-lg hover:bg-blue-400 active:scale-95 transition-all duration-150"
-            >
-              <Plus className="h-4 w-4" />
-              Dodaj Materiał
-            </button>
-          )}
-
-          <ScannerButton onScan={handleBarcodeScan} />
-
           <button
             onClick={() => setIsLocationsModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 hover:border-zinc-700 active:scale-95 transition-all duration-150"
@@ -1050,15 +1071,6 @@ function MagazynPageContent() {
           >
             <Tag className="h-4 w-4 text-zinc-400" />
             Zarządzaj Kategoriami
-          </button>
-          
-          <button 
-            onClick={fetchData} 
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Odśwież
           </button>
         </div>
       </div>
@@ -1114,30 +1126,64 @@ function MagazynPageContent() {
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="border-b border-zinc-850 flex space-x-6">
-            <button
-              onClick={() => { setActiveTab('items'); }}
-              className={`pb-3 text-sm font-semibold border-b-2 transition-all duration-300 flex items-center gap-2 ${
-                activeTab === 'items'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Package className="h-4.5 w-4.5" />
-              Sprzęt Trwały ({filteredItems.length})
-            </button>
-            <button
-              onClick={() => { setActiveTab('consumables'); }}
-              className={`pb-3 text-sm font-semibold border-b-2 transition-all duration-300 flex items-center gap-2 ${
-                activeTab === 'consumables'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <Boxes className="h-4.5 w-4.5" />
-              Materiały Zużywalne ({filteredConsumables.length})
-            </button>
+          {/* Navigation Tabs & Actions Row */}
+          <div className="border-b border-zinc-850 flex flex-col md:flex-row md:items-end justify-between mt-6 gap-4 pb-2 md:pb-0">
+            <div className="flex space-x-6 overflow-x-auto w-full md:w-auto -mb-[2px] md:-mb-[1px] scrollbar-none pb-1 md:pb-0">
+              <button
+                onClick={() => { setActiveTab('items'); }}
+                className={`pb-3.5 text-sm font-semibold border-b-2 transition-all duration-300 flex items-center gap-2 -mb-[1px] shrink-0 ${
+                  activeTab === 'items'
+                    ? 'border-blue-500 text-blue-400 font-bold'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Package className="h-4.5 w-4.5" />
+                Sprzęt Trwały ({filteredItems.length})
+              </button>
+              <button
+                onClick={() => { setActiveTab('consumables'); }}
+                className={`pb-3.5 text-sm font-semibold border-b-2 transition-all duration-300 flex items-center gap-2 -mb-[1px] shrink-0 ${
+                  activeTab === 'consumables'
+                    ? 'border-blue-500 text-blue-400 font-bold'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Boxes className="h-4.5 w-4.5" />
+                Materiały Zużywalne ({filteredConsumables.length})
+              </button>
+            </div>
+
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 pb-3 w-full md:w-auto">
+              {activeTab === 'items' ? (
+                <button
+                  onClick={openAddItemModal}
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold text-black bg-blue-500 rounded-lg hover:bg-blue-400 active:scale-95 transition-all duration-150 shadow-md shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                  Dodaj Przedmiot
+                </button>
+              ) : (
+                <button
+                  onClick={openAddConsumableModal}
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold text-black bg-blue-500 rounded-lg hover:bg-blue-400 active:scale-95 transition-all duration-150 shadow-md shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                  Dodaj Materiał
+                </button>
+              )}
+
+              <ScannerButton onScan={handleBarcodeScan} className="flex-1 sm:flex-initial w-full sm:w-auto justify-center" />
+
+              {/* Square Refresh Button */}
+              <button 
+                onClick={fetchData} 
+                disabled={loading}
+                title="Odśwież dane"
+                className="flex items-center justify-center h-9 w-9 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 hover:border-zinc-700 transition-colors disabled:opacity-50 shrink-0"
+              >
+                <RefreshCw className={`h-4.5 w-4.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
 
           {/* Dynamic Table Content */}
@@ -1168,104 +1214,179 @@ function MagazynPageContent() {
                   <p className="text-xs">Zmień filtry lub kryteria wyszukiwania.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider select-none">
-                        <th className="py-3 px-4 w-16 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('id')}>
-                          <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('name')}>
-                          <div className="flex items-center gap-1">Nazwa sprzętu <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('room')}>
-                          <div className="flex items-center gap-1">Pojemnik / Pokój <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('responsible')}>
-                          <div className="flex items-center gap-1">Opiekun <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('status')}>
-                          <div className="flex items-center gap-1">Status <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 text-right">Akcje</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
-                      {sortedItems.map(item => {
-                        const statusColors = {
-                          in_workshop: 'bg-slate-500/10 text-slate-400 border border-slate-500/20',
-                          assigned_to_event: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
-                          packed: 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                        };
-                        const statusLabels = {
-                          in_workshop: 'W warsztacie',
-                          assigned_to_event: 'Przypisany',
-                          packed: 'Spakowany'
-                        };
-                        const locDetails = getLocationDetails(item.location_id);
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider select-none">
+                          <th className="py-3 px-4 w-16 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('id')}>
+                            <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('name')}>
+                            <div className="flex items-center gap-1">Nazwa sprzętu <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('room')}>
+                            <div className="flex items-center gap-1">Pojemnik / Pokój <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('responsible')}>
+                            <div className="flex items-center gap-1">Opiekun <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('status')}>
+                            <div className="flex items-center gap-1">Status <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 text-right">Akcje</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
+                        {sortedItems.map(item => {
+                          const statusColors = {
+                            in_workshop: 'bg-slate-500/10 text-slate-400 border border-slate-500/20',
+                            assigned_to_event: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+                            packed: 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          };
+                          const statusLabels = {
+                            in_workshop: 'W warsztacie',
+                            assigned_to_event: 'Przypisany',
+                            packed: 'Spakowany'
+                          };
+                          const locDetails = getLocationDetails(item.location_id);
 
-                        return (
-                          <tr 
-                            key={item.id} 
-                            className="hover:bg-zinc-900/30 transition-colors duration-150"
-                          >
-                            <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{item.id}</td>
-                            <td className="py-3.5 px-4 font-semibold text-zinc-100">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span>{item.name}</span>
+                          return (
+                            <tr 
+                              key={item.id} 
+                              className="hover:bg-zinc-900/30 transition-colors duration-150"
+                            >
+                              <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{item.id}</td>
+                              <td className="py-3.5 px-4 font-semibold text-zinc-100">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span>{item.name}</span>
+                                  {renderCategoryBadge(item.category_id)}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col">
+                                  <span className="flex items-center gap-1 text-zinc-350 font-medium">
+                                    <MapPin className="h-3.5 w-3.5 text-zinc-550 shrink-0" />
+                                    {locDetails.name}
+                                  </span>
+                                  {locDetails.room && (
+                                    <span className="text-[10px] text-zinc-500 ml-4.5">Pokój: {locDetails.room}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="flex items-center gap-1.5 text-zinc-400">
+                                  <User className="h-3.5 w-3.5 text-zinc-600" />
+                                  {item.responsible_person || 'Brak opiekuna'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[item.status]}`}>
+                                  {statusLabels[item.status]}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => openEditItemModal(item)}
+                                    className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
+                                    title="Edytuj przedmiot"
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </button>
+                                  {item.shop_link && (
+                                    <a
+                                      href={item.shop_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-blue-450 hover:text-blue-355 hover:bg-zinc-700 transition-all"
+                                      title="Strona sklepu"
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card-List View */}
+                  <div className="block md:hidden space-y-3 p-3">
+                    {sortedItems.map(item => {
+                      const statusColors = {
+                        in_workshop: 'bg-slate-500/10 text-slate-400 border border-slate-500/20',
+                        assigned_to_event: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+                        packed: 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      };
+                      const statusLabels = {
+                        in_workshop: 'W warsztacie',
+                        assigned_to_event: 'Przypisany',
+                        packed: 'Spakowany'
+                      };
+                      const locDetails = getLocationDetails(item.location_id);
+
+                      return (
+                        <div key={`item-card-${item.id}`} className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="font-mono text-[10px] text-zinc-550">#{item.id}</div>
+                              <div className="font-bold text-zinc-100 text-sm leading-tight">{item.name}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                 {renderCategoryBadge(item.category_id)}
                               </div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <div className="flex flex-col">
-                                <span className="flex items-center gap-1 text-zinc-350 font-medium">
-                                  <MapPin className="h-3.5 w-3.5 text-zinc-550 shrink-0" />
-                                  {locDetails.name}
-                                </span>
-                                {locDetails.room && (
-                                  <span className="text-[10px] text-zinc-500 ml-4.5">Pokój: {locDetails.room}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className="flex items-center gap-1.5 text-zinc-400">
-                                <User className="h-3.5 w-3.5 text-zinc-600" />
-                                {item.responsible_person || 'Brak opiekuna'}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[item.status]}`}>
+                            </div>
+                            <div className="shrink-0">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${statusColors[item.status]}`}>
                                 {statusLabels[item.status]}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => openEditItemModal(item)}
-                                  className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
-                                  title="Edytuj przedmiot"
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </button>
-                                {item.shop_link && (
-                                  <a
-                                    href={item.shop_link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-blue-450 hover:text-blue-355 hover:bg-zinc-700 transition-all"
-                                    title="Strona sklepu"
-                                  >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                  </a>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-850/50 text-xs text-zinc-400">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-zinc-550 block font-semibold uppercase tracking-wide">Lokalizacja</span>
+                              <span className="flex items-center gap-1 text-zinc-300 font-medium">
+                                <MapPin className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                                <span className="truncate max-w-[125px]">{locDetails.name}</span>
+                              </span>
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-zinc-550 block font-semibold uppercase tracking-wide">Opiekun</span>
+                              <span className="flex items-center gap-1 text-zinc-300 font-medium">
+                                <User className="h-3.5 w-3.5 text-zinc-650 shrink-0" />
+                                <span className="truncate max-w-[125px]">{item.responsible_person || 'Brak'}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-850/30">
+                            <button
+                              onClick={() => openEditItemModal(item)}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors text-xs font-semibold active:scale-[0.98]"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" /> Edytuj
+                            </button>
+                            {item.shop_link && (
+                              <a
+                                href={item.shop_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-blue-400 hover:text-blue-300 transition-colors text-xs font-semibold active:scale-[0.98]"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" /> Sklep
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )
             ) : (
               /* Consumables Table */
@@ -1276,128 +1397,217 @@ function MagazynPageContent() {
                   <p className="text-xs">Zmień filtry lub kryteria wyszukiwania.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider select-none">
-                        <th className="py-3 px-4 w-16 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('id')}>
-                          <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('name')}>
-                          <div className="flex items-center gap-1">Nazwa materiału <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('room')}>
-                          <div className="flex items-center gap-1">Pojemnik / Pokój <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('responsible')}>
-                          <div className="flex items-center gap-1">Opiekun <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 text-center cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('qty')}>
-                          <div className="flex items-center justify-center gap-1">Stan <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 text-center cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('min_qty')}>
-                          <div className="flex items-center justify-center gap-1">Min. <ArrowUpDown className="h-3 w-3" /></div>
-                        </th>
-                        <th className="py-3 px-4 text-center">Szybka edycja</th>
-                        <th className="py-3 px-4 text-right">Akcje</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
-                      {sortedConsumables.map(cons => {
-                        const isLowStock = Number(cons.quantity_stored) < Number(cons.min_quantity);
-                        const locDetails = getLocationDetails(cons.location_id);
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider select-none">
+                          <th className="py-3 px-4 w-16 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('id')}>
+                            <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('name')}>
+                            <div className="flex items-center gap-1">Nazwa materiału <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('room')}>
+                            <div className="flex items-center gap-1">Pojemnik / Pokój <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('responsible')}>
+                            <div className="flex items-center gap-1">Opiekun <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 text-center cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('qty')}>
+                            <div className="flex items-center justify-center gap-1">Stan <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 text-center cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('min_qty')}>
+                            <div className="flex items-center justify-center gap-1">Min. <ArrowUpDown className="h-3 w-3" /></div>
+                          </th>
+                          <th className="py-3 px-4 text-center">Szybka edycja</th>
+                          <th className="py-3 px-4 text-right">Akcje</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-850 text-sm text-zinc-300">
+                        {sortedConsumables.map(cons => {
+                          const isLowStock = Number(cons.quantity_stored) < Number(cons.min_quantity);
+                          const locDetails = getLocationDetails(cons.location_id);
 
-                        return (
-                          <tr 
-                            key={cons.id} 
-                            className={`transition-colors duration-500 hover:bg-zinc-900/30 ${
-                              recentlyUpdatedId === `cons-${cons.id}` 
-                                ? 'bg-blue-500/10' 
-                                : ''
-                            }`}
-                          >
-                            <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{cons.id}</td>
-                            <td className="py-3.5 px-4 font-semibold text-zinc-100">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span>{cons.name}</span>
+                          return (
+                            <tr 
+                              key={cons.id} 
+                              className={`transition-colors duration-500 hover:bg-zinc-900/30 ${
+                                recentlyUpdatedId === `cons-${cons.id}` 
+                                  ? 'bg-blue-500/10' 
+                                  : ''
+                              }`}
+                            >
+                              <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{cons.id}</td>
+                              <td className="py-3.5 px-4 font-semibold text-zinc-100">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span>{cons.name}</span>
+                                  {renderCategoryBadge(cons.category_id)}
+                                  {isLowStock && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                      <AlertCircle className="h-3 w-3" /> Kup
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col">
+                                  <span className="flex items-center gap-1 text-zinc-350 font-medium">
+                                    <MapPin className="h-3.5 w-3.5 text-zinc-550 shrink-0" />
+                                    {locDetails.name}
+                                  </span>
+                                  {locDetails.room && (
+                                    <span className="text-[10px] text-zinc-500 ml-4.5">Pokój: {locDetails.room}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="flex items-center gap-1.5 text-zinc-400">
+                                  <User className="h-3.5 w-3.5 text-zinc-600" />
+                                  {cons.responsible_person || 'Brak opiekuna'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-mono font-bold">
+                                <span className={isLowStock ? 'text-rose-400' : 'text-blue-400'}>
+                                  {cons.quantity_stored}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-mono text-zinc-500">{cons.min_quantity}</td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => handleQuantityChange(cons.id, Number(cons.quantity_stored), -1)}
+                                    disabled={cons.quantity_stored === 0}
+                                    className="p-1.5 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 active:scale-90 transition-transform duration-100 disabled:opacity-30"
+                                    title="-1 sztuka"
+                                  >
+                                    <Minus className="h-3 w-3 text-zinc-300" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleQuantityChange(cons.id, Number(cons.quantity_stored), 1)}
+                                    className="p-1.5 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 active:scale-90 transition-transform duration-100 disabled:opacity-30"
+                                    title="+1 sztuka"
+                                  >
+                                    <Plus className="h-3 w-3 text-zinc-300" />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => openEditConsumableModal(cons)}
+                                    className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
+                                    title="Edytuj materiał"
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </button>
+                                  {cons.shop_link && (
+                                    <a
+                                      href={cons.shop_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-blue-450 hover:text-blue-355 hover:bg-zinc-700 transition-all"
+                                      title="Strona sklepu"
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card-List View */}
+                  <div className="block md:hidden space-y-3 p-3">
+                    {sortedConsumables.map(cons => {
+                      const isLowStock = Number(cons.quantity_stored) < Number(cons.min_quantity);
+                      const locDetails = getLocationDetails(cons.location_id);
+
+                      return (
+                        <div 
+                          key={`cons-card-${cons.id}`} 
+                          className={`bg-zinc-900/40 border rounded-xl p-4 space-y-3 transition-all duration-300 ${
+                            recentlyUpdatedId === `cons-${cons.id}` 
+                              ? 'bg-blue-500/10 border-blue-500/30' 
+                              : 'border-zinc-850'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="font-mono text-[10px] text-zinc-550">#{cons.id}</div>
+                              <div className="font-bold text-zinc-100 text-sm leading-tight">{cons.name}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                 {renderCategoryBadge(cons.category_id)}
                                 {isLowStock && (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                                     <AlertCircle className="h-3 w-3" /> Kup
                                   </span>
                                 )}
                               </div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <div className="flex flex-col">
-                                <span className="flex items-center gap-1 text-zinc-350 font-medium">
-                                  <MapPin className="h-3.5 w-3.5 text-zinc-550 shrink-0" />
-                                  {locDetails.name}
-                                </span>
-                                {locDetails.room && (
-                                  <span className="text-[10px] text-zinc-500 ml-4.5">Pokój: {locDetails.room}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className="flex items-center gap-1.5 text-zinc-400">
-                                <User className="h-3.5 w-3.5 text-zinc-600" />
-                                {cons.responsible_person || 'Brak opiekuna'}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-mono font-bold">
-                              <span className={isLowStock ? 'text-rose-400' : 'text-blue-400'}>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0 bg-zinc-950/45 p-1 rounded-lg border border-zinc-800/80">
+                              <button
+                                onClick={() => handleQuantityChange(cons.id, Number(cons.quantity_stored), -1)}
+                                disabled={cons.quantity_stored === 0}
+                                className="p-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-30"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className={`px-2 font-mono font-bold text-sm min-w-[28px] text-center ${isLowStock ? 'text-rose-400' : 'text-blue-400'}`}>
                                 {cons.quantity_stored}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-mono text-zinc-500">{cons.min_quantity}</td>
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  onClick={() => handleQuantityChange(cons.id, Number(cons.quantity_stored), -1)}
-                                  disabled={cons.quantity_stored === 0}
-                                  className="p-1.5 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 active:scale-90 transition-transform duration-100 disabled:opacity-30"
-                                  title="-1 sztuka"
-                                >
-                                  <Minus className="h-3 w-3 text-zinc-300" />
-                                </button>
-                                <button
-                                  onClick={() => handleQuantityChange(cons.id, Number(cons.quantity_stored), 1)}
-                                  className="p-1.5 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 active:scale-90 transition-transform duration-100 disabled:opacity-30"
-                                  title="+1 sztuka"
-                                >
-                                  <Plus className="h-3 w-3 text-zinc-300" />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => openEditConsumableModal(cons)}
-                                  className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
-                                  title="Edytuj materiał"
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </button>
-                                {cons.shop_link && (
-                                  <a
-                                    href={cons.shop_link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 rounded-md bg-zinc-800 border border-zinc-700 text-blue-450 hover:text-blue-355 hover:bg-zinc-700 transition-all"
-                                    title="Strona sklepu"
-                                  >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                  </a>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              <button
+                                onClick={() => handleQuantityChange(cons.id, Number(cons.quantity_stored), 1)}
+                                className="p-1.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                              >
+                                <Plus className="h-3 w-3 text-zinc-300" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 py-2.5 border-t border-b border-zinc-850/50 text-xs font-mono text-center">
+                            <div>
+                              <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Min. Stan</div>
+                              <div className="text-zinc-450">{cons.min_quantity}</div>
+                            </div>
+                            <div className="col-span-2 text-left pl-3 border-l border-zinc-850/50">
+                              <div className="text-zinc-550 text-[10px] uppercase font-semibold mb-0.5">Lokalizacja</div>
+                              <span className="flex items-center gap-1 text-zinc-350 font-medium truncate max-w-[155px]">
+                                <MapPin className="h-3 w-3 text-zinc-500 shrink-0" />
+                                {locDetails.name}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            <button
+                              onClick={() => openEditConsumableModal(cons)}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors text-xs font-semibold active:scale-[0.98]"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" /> Edytuj
+                            </button>
+                            {cons.shop_link && (
+                              <a
+                                href={cons.shop_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-blue-400 hover:text-blue-300 transition-colors text-xs font-semibold active:scale-[0.98]"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" /> Sklep
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )
             )}
           </div>
@@ -1412,8 +1622,11 @@ function MagazynPageContent() {
                  (loc.responsible_person || '').toLowerCase().includes(q);
         });
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-            <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) { setIsLocationsModalOpen(false); setLocSearchQuery(''); cancelEditLocation(); } }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200"
+          >
+            <div className="w-[96%] max-w-xl md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
               <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Settings className="h-5 w-5 text-blue-400" />
@@ -1579,8 +1792,11 @@ function MagazynPageContent() {
 
       {/* 3. Modal: Add/Edit Consumable */}
       {isConsumableModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-          <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setIsConsumableModalOpen(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200"
+        >
+          <div className="w-[96%] max-w-xl md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-blue-400" />
@@ -1788,8 +2004,11 @@ function MagazynPageContent() {
           cat.name.toLowerCase().includes(catSearchQuery.toLowerCase())
         );
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-            <div className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) { setIsCategoriesModalOpen(false); setCatSearchQuery(''); cancelEditCategory(); } }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200"
+          >
+            <div className="w-[96%] max-w-xl md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
               <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Tag className="h-5 w-5 text-blue-400" />
