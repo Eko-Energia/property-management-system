@@ -14,40 +14,77 @@ function ScanDispatcher() {
   useEffect(() => {
     const rawId = searchParams.get('id');
     if (!rawId) {
-      setErrorMsg('Brak identyfikatora SKU w zeskanowanym linku.');
+      setErrorMsg('Brak identyfikatora w zeskanowanym linku.');
       return;
     }
 
     const cleanId = rawId.trim().toUpperCase();
-    
-    // Validate format using regex: (I|C)-[A-Z]{2,3}-\d{4}
-    const skuRegex = /^(I|C)-[A-Z]{2,3}-\d{4}$/;
-    if (!skuRegex.test(cleanId)) {
-      setErrorMsg(`Niepoprawny format identyfikatora SKU: "${cleanId}". Kod powinien zaczynać się od I- lub C-, np. I-NA-0001.`);
-      return;
-    }
 
     const checkAndRedirect = async () => {
-      let redirectUrl = `/magazyn?open=${cleanId}`;
+      let redirectUrl = `/magazyn?open=${encodeURIComponent(cleanId)}`;
 
       // Mock data logic for offline testing/demo mode
       const mockEventItems = ['I-NR-0102', 'I-EL-0103', 'I-NR-0105', 'I-EL-0106'];
       if (mockEventItems.includes(cleanId)) {
-        redirectUrl = `/zawody/10?open=${cleanId}`;
-      } else if (cleanId.startsWith('I')) {
+        redirectUrl = `/zawody/10?open=${encodeURIComponent(cleanId)}`;
+      } else {
         try {
-          const { data, error } = await supabase
+          // 1. Search items by barcode first, then id
+          const { data: itemByBarcode } = await supabase
             .from('items')
-            .select('status, location_id, locations(type, event_id)')
-            .eq('id', cleanId)
+            .select('id, status, location_id, locations(type, event_id)')
+            .eq('barcode', cleanId)
             .maybeSingle();
 
-          if (data && data.locations) {
-            const locData: any = Array.isArray(data.locations) 
-              ? data.locations[0] 
-              : data.locations;
-            if (locData && locData.type === 'event_box' && locData.event_id) {
-              redirectUrl = `/zawody/${locData.event_id}?open=${cleanId}`;
+          let itemMatch = itemByBarcode;
+          if (!itemMatch) {
+            const { data: itemById } = await supabase
+              .from('items')
+              .select('id, status, location_id, locations(type, event_id)')
+              .eq('id', cleanId)
+              .maybeSingle();
+            itemMatch = itemById;
+          }
+
+          if (itemMatch) {
+            const resolvedId = itemMatch.id;
+            redirectUrl = `/magazyn?open=${encodeURIComponent(resolvedId)}`;
+
+            if (itemMatch.locations) {
+              const locData: any = Array.isArray(itemMatch.locations) 
+                ? itemMatch.locations[0] 
+                : itemMatch.locations;
+              if (locData && locData.type === 'event_box' && locData.event_id) {
+                redirectUrl = `/zawody/${locData.event_id}?open=${encodeURIComponent(resolvedId)}`;
+              }
+            }
+          } else {
+            // 2. Search consumables by barcode first, then id
+            const { data: consByBarcode } = await supabase
+              .from('consumables')
+              .select('id, location_id, locations(type, event_id)')
+              .eq('barcode', cleanId)
+              .maybeSingle();
+
+            let consMatch = consByBarcode;
+            if (!consMatch) {
+              const { data: consById } = await supabase
+                .from('consumables')
+                .select('id, location_id, locations(type, event_id)')
+                .eq('id', cleanId)
+                .maybeSingle();
+              consMatch = consById;
+            }
+
+            if (consMatch) {
+              const resolvedId = consMatch.id;
+              redirectUrl = `/magazyn?open=${encodeURIComponent(resolvedId)}`;
+              if (consMatch.locations) {
+                const locData: any = Array.isArray(consMatch.locations) ? consMatch.locations[0] : consMatch.locations;
+                if (locData && locData.type === 'event_box' && locData.event_id) {
+                  redirectUrl = `/zawody/${locData.event_id}?open=${encodeURIComponent(resolvedId)}`;
+                }
+              }
             }
           }
         } catch (err) {

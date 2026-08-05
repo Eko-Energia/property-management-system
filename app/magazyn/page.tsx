@@ -24,6 +24,7 @@ import {
   AlertCircle, 
   User, 
   QrCode,
+  Barcode,
   MapPin,
   RefreshCw,
   CheckCircle2,
@@ -116,6 +117,7 @@ function MagazynPageContent() {
   const [consLocId, setConsLocId] = useState<string>('');
   const [consResponsible, setConsResponsible] = useState<string>('');
   const [consCategoryId, setConsCategoryId] = useState<string>('');
+  const [consBarcode, setConsBarcode] = useState<string>('');
 
   // Fallback Mock Data
   const mockLocations: DatabaseLocation[] = [
@@ -224,17 +226,17 @@ function MagazynPageContent() {
     };
   }, [isLocationsModalOpen, isCategoriesModalOpen, isConsumableModalOpen, isItemModalOpen]);
 
-  // Support open parameter deep-linking from QR code scans
+  // Support open parameter deep-linking from QR / Barcode scans
   useEffect(() => {
     if (loading) return;
 
     const openSku = searchParams.get('open');
     if (!openSku) return;
 
-    const upperSku = openSku.toUpperCase().trim();
+    const upperCode = openSku.toUpperCase().trim();
 
-    // Check in items list
-    const matchedItem = items.find(i => i.id.toUpperCase() === upperSku);
+    // Check in items list by barcode first, fallback to id (SKU)
+    const matchedItem = items.find(i => (i.barcode && i.barcode.trim().toUpperCase() === upperCode) || i.id.toUpperCase() === upperCode);
     if (matchedItem) {
       setActiveTab('items');
       openEditItemModal(matchedItem);
@@ -242,8 +244,8 @@ function MagazynPageContent() {
       return;
     }
 
-    // Check in consumables list
-    const matchedConsumable = consumables.find(c => c.id.toUpperCase() === upperSku);
+    // Check in consumables list by barcode first, fallback to id (SKU)
+    const matchedConsumable = consumables.find(c => (c.barcode && c.barcode.trim().toUpperCase() === upperCode) || c.id.toUpperCase() === upperCode);
     if (matchedConsumable) {
       setActiveTab('consumables');
       openEditConsumableModal(matchedConsumable);
@@ -253,11 +255,14 @@ function MagazynPageContent() {
   }, [loading, items, consumables, searchParams, router]);
 
   // Handler for scans made using ScannerButton inside app
-  const handleBarcodeScan = (skuCode: string) => {
-    const upperSku = skuCode.toUpperCase().trim();
+  const handleBarcodeScan = (scannedCode: string) => {
+    const upperCode = scannedCode.toUpperCase().trim();
 
-    // Check in items
-    const item = items.find(i => i.id.toUpperCase() === upperSku);
+    // Check in items by barcode first, fallback to id (SKU)
+    const itemByBarcode = items.find(i => i.barcode && i.barcode.trim().toUpperCase() === upperCode);
+    const itemById = items.find(i => i.id.toUpperCase() === upperCode);
+    const item = itemByBarcode || itemById;
+
     if (item) {
       setActiveTab('items');
       openEditItemModal(item);
@@ -265,8 +270,11 @@ function MagazynPageContent() {
       return;
     }
 
-    // Check in consumables
-    const cons = consumables.find(c => c.id.toUpperCase() === upperSku);
+    // Check in consumables by barcode first, fallback to id (SKU)
+    const consByBarcode = consumables.find(c => c.barcode && c.barcode.trim().toUpperCase() === upperCode);
+    const consById = consumables.find(c => c.id.toUpperCase() === upperCode);
+    const cons = consByBarcode || consById;
+
     if (cons) {
       setActiveTab('consumables');
       openEditConsumableModal(cons);
@@ -274,7 +282,7 @@ function MagazynPageContent() {
       return;
     }
 
-    showToast(`Nie znaleziono kodu "${skuCode}" w magazynie.`, 'error');
+    showToast(`Nie znaleziono kodu "${scannedCode}" w magazynie.`, 'error');
   };
 
   // --- Location Picker Event handlers (Default Opiekun resolution) ---
@@ -765,6 +773,7 @@ function MagazynPageContent() {
     setConsLocId('');
     setConsResponsible('');
     setConsCategoryId('');
+    setConsBarcode('');
     
     setIsConsumableModalOpen(true);
   };
@@ -779,6 +788,7 @@ function MagazynPageContent() {
     setConsLocId(c.location_id ? c.location_id.toString() : '');
     setConsResponsible(c.responsible_person || '');
     setConsCategoryId(c.category_id ? c.category_id.toString() : '');
+    setConsBarcode(c.barcode || '');
     setIsConsumableModalOpen(true);
   };
 
@@ -809,7 +819,8 @@ function MagazynPageContent() {
           shop_link: consLink.trim(),
           location_id: parsedLocId as any,
           responsible_person: consResponsible.trim() || null,
-          category_id: parsedCategoryId
+          category_id: parsedCategoryId,
+          barcode: consBarcode.trim() || null
         } : c));
       } else {
         if (consumables.some(c => c.id.toUpperCase() === consIdInput.trim().toUpperCase())) {
@@ -825,7 +836,8 @@ function MagazynPageContent() {
           shop_link: consLink.trim(),
           location_id: parsedLocId as any,
           responsible_person: consResponsible.trim() || null,
-          category_id: parsedCategoryId
+          category_id: parsedCategoryId,
+          barcode: consBarcode.trim() || null
         };
         setConsumables(prev => [...prev, newCons]);
       }
@@ -848,7 +860,8 @@ function MagazynPageContent() {
             shop_link: consLink.trim(),
             location_id: parsedLocId,
             responsible_person: consResponsible.trim() || null,
-            category_id: parsedCategoryId
+            category_id: parsedCategoryId,
+            barcode: consBarcode.trim() || null
           })
           .eq('id', editingConsumable.id);
 
@@ -864,7 +877,8 @@ function MagazynPageContent() {
             shop_link: consLink.trim(),
             location_id: parsedLocId,
             responsible_person: consResponsible.trim() || null,
-            category_id: parsedCategoryId
+            category_id: parsedCategoryId,
+            barcode: consBarcode.trim() || null
           });
 
         if (error) throw error;
@@ -1849,6 +1863,36 @@ function MagazynPageContent() {
                     value={consIdInput}
                     onChange={(e) => setConsIdInput(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* Consumable Barcode / Label */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5 flex justify-between items-center">
+                  <span>Kod kreskowy (Etykieta)</span>
+                  <span className="text-[10px] text-zinc-500 font-normal lowercase font-sans">opcjonalny kod z naklejki</span>
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                      <Barcode className="w-5 h-5 block shrink-0" />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Zeskanuj lub wpisz kod z naklejki (np. 00045)..."
+                      value={consBarcode}
+                      onChange={(e) => setConsBarcode(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 text-sm font-mono"
+                    />
+                  </div>
+                  <ScannerButton
+                    buttonText=""
+                    icon={Barcode}
+                    className="!px-3.5 !py-2.5 bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 rounded-lg shrink-0 flex items-center justify-center"
+                    onScan={(scannedCode) => {
+                      setConsBarcode(scannedCode);
+                    }}
                   />
                 </div>
               </div>

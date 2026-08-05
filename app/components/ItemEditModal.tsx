@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, DatabaseItem, DatabaseLocation, DatabaseCategory } from '@/utils/supabase/client';
 import SearchableSelect from '@/app/components/SearchableSelect';
-import { X, Package, QrCode, Boxes, Tag, User, ExternalLink, Settings } from 'lucide-react';
+import ScannerButton from '@/app/components/ScannerButton';
+import { X, Package, QrCode, Boxes, Tag, User, ExternalLink, Settings, Barcode } from 'lucide-react';
 
 interface ItemWithLocation extends DatabaseItem {
   locations?: {
@@ -42,6 +43,7 @@ export default function ItemEditModal({
   const [itemLink, setItemLink] = useState('');
   const [itemStatus, setItemStatus] = useState<'in_workshop' | 'assigned_to_event' | 'packed'>('in_workshop');
   const [itemCategoryId, setItemCategoryId] = useState('');
+  const [itemBarcode, setItemBarcode] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [showAllEventBoxes, setShowAllEventBoxes] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
@@ -72,6 +74,7 @@ export default function ItemEditModal({
         setItemLink(editingItem.shop_link || '');
         setItemStatus(editingItem.status || 'in_workshop');
         setItemCategoryId(editingItem.category_id ? editingItem.category_id.toString() : '');
+        setItemBarcode(editingItem.barcode || '');
       } else {
         setItemName('');
         setItemIdInput('');
@@ -80,6 +83,7 @@ export default function ItemEditModal({
         setItemLink('');
         setItemStatus('in_workshop');
         setItemCategoryId('');
+        setItemBarcode('');
       }
       setShowAllEventBoxes(false);
     }
@@ -226,6 +230,7 @@ export default function ItemEditModal({
         location_id: parsedLocId as any,
         status: itemStatus,
         category_id: parsedCategoryId,
+        barcode: itemBarcode.trim() || null,
         locations: itemLocationsMock
       };
       if (onSaveDemo) {
@@ -247,7 +252,8 @@ export default function ItemEditModal({
             shop_link: itemLink.trim(),
             location_id: parsedLocId,
             status: itemStatus,
-            category_id: parsedCategoryId
+            category_id: parsedCategoryId,
+            barcode: itemBarcode.trim() || null
           })
           .eq('id', editingItem.id);
 
@@ -262,7 +268,8 @@ export default function ItemEditModal({
             shop_link: itemLink.trim(),
             location_id: parsedLocId,
             status: itemStatus,
-            category_id: parsedCategoryId
+            category_id: parsedCategoryId,
+            barcode: itemBarcode.trim() || null
           });
 
         if (error) throw error;
@@ -346,6 +353,36 @@ export default function ItemEditModal({
                 value={itemIdInput}
                 onChange={(e) => setItemIdInput(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-105 placeholder-zinc-550 focus:outline-none focus:border-blue-500/50 transition-all duration-200 text-sm font-mono disabled:opacity-40 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
+
+          {/* Item Barcode / Label */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5 flex justify-between items-center">
+              <span>Kod kreskowy (Etykieta)</span>
+              <span className="text-[10px] text-zinc-500 font-normal lowercase font-sans">opcjonalny kod z naklejki</span>
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-zinc-500 pointer-events-none">
+                  <Barcode className="w-5 h-5 block shrink-0" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Zeskanuj lub wpisz kod z naklejki (np. 00045)..."
+                  value={itemBarcode}
+                  onChange={(e) => setItemBarcode(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 placeholder-zinc-550 focus:outline-none focus:border-blue-500/50 transition-all duration-200 text-sm font-mono"
+                />
+              </div>
+              <ScannerButton
+                buttonText=""
+                icon={Barcode}
+                className="!px-3.5 !py-2.5 bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 rounded-lg shrink-0 flex items-center justify-center"
+                onScan={(scannedCode) => {
+                  setItemBarcode(scannedCode);
+                }}
               />
             </div>
           </div>

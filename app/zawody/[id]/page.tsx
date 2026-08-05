@@ -910,7 +910,7 @@ function EventPackingPageContent() {
   };
 
   // --- Scanner Logic ---
-  const handleScanCode = async (skuCode: string) => {
+  const handleScanCode = async (scannedCode: string) => {
     setScanError(null);
     setScanSuccess(null);
     setScannedItem(null);
@@ -923,26 +923,16 @@ function EventPackingPageContent() {
       return;
     }
 
-    const cleanSku = skuCode.trim().toUpperCase();
-    if (!cleanSku) return;
-
-    // Sprawdzamy pierwszą literę identyfikatora (SKU)
-    const firstChar = cleanSku[0]?.toUpperCase();
-    if (firstChar !== 'I' && firstChar !== 'C') {
-      setScanError('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
-      alert('ID musi zaczynać się od litery I (sprzęt) lub C (materiały), np. I-NA-0001.');
-      return;
-    }
-
-    const searchType = firstChar === 'I' ? 'item' : 'consumable';
+    const cleanCode = scannedCode.trim().toUpperCase();
+    if (!cleanCode) return;
 
     if (isDemoMode) {
-      const scannedItemVal = searchType === 'item'
-        ? mockItems.find(i => i.id.toUpperCase() === cleanSku)
-        : null;
+      // 1. Check mock items by barcode then id
+      const scannedItemVal = mockItems.find(i => (i.barcode && i.barcode.trim().toUpperCase() === cleanCode) || i.id.toUpperCase() === cleanCode);
 
-      const scannedConsVal = searchType === 'consumable'
-        ? mockConsumables.find(c => c.id.toUpperCase() === cleanSku)
+      // 2. Check mock consumables by barcode then id
+      const scannedConsVal = !scannedItemVal
+        ? mockConsumables.find(c => (c.barcode && c.barcode.trim().toUpperCase() === cleanCode) || c.id.toUpperCase() === cleanCode)
         : null;
 
       if (scannedItemVal) {
@@ -952,7 +942,7 @@ function EventPackingPageContent() {
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === cleanSku && c.locationId === targetBoxId);
+        const existingEC = consumablesList.find(c => (c.consumableId.toUpperCase() === scannedConsVal.id.toUpperCase()) && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
@@ -963,8 +953,8 @@ function EventPackingPageContent() {
         return;
       }
 
-      setScanError(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
-      alert(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
+      setScanError(`Nie znaleziono kodu: ${cleanCode} w bazie.`);
+      alert(`Nie znaleziono kodu: ${cleanCode} w bazie.`);
       return;
     }
 
@@ -972,20 +962,43 @@ function EventPackingPageContent() {
       let scannedItemVal = null;
       let scannedConsVal = null;
 
-      if (searchType === 'item') {
-        const { data: itemData } = await supabase
+      // 1. Search items by barcode
+      const { data: itemByBarcode } = await supabase
+        .from('items')
+        .select('*, locations(type, event_id)')
+        .eq('barcode', cleanCode)
+        .maybeSingle();
+
+      if (itemByBarcode) {
+        scannedItemVal = itemByBarcode;
+      } else {
+        // Fallback to search items by id (SKU)
+        const { data: itemById } = await supabase
           .from('items')
           .select('*, locations(type, event_id)')
-          .eq('id', cleanSku)
+          .eq('id', cleanCode)
           .maybeSingle();
-        scannedItemVal = itemData;
-      } else {
-        const { data: consData } = await supabase
+        scannedItemVal = itemById;
+      }
+
+      // 2. If not found in items, search consumables by barcode then id
+      if (!scannedItemVal) {
+        const { data: consByBarcode } = await supabase
           .from('consumables')
           .select('*')
-          .eq('id', cleanSku)
+          .eq('barcode', cleanCode)
           .maybeSingle();
-        scannedConsVal = consData;
+
+        if (consByBarcode) {
+          scannedConsVal = consByBarcode;
+        } else {
+          const { data: consById } = await supabase
+            .from('consumables')
+            .select('*')
+            .eq('id', cleanCode)
+            .maybeSingle();
+          scannedConsVal = consById;
+        }
       }
 
       if (scannedItemVal) {
@@ -995,7 +1008,7 @@ function EventPackingPageContent() {
       }
 
       if (scannedConsVal) {
-        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === cleanSku && c.locationId === targetBoxId);
+        const existingEC = consumablesList.find(c => c.consumableId.toUpperCase() === scannedConsVal.id.toUpperCase() && c.locationId === targetBoxId);
         setPackingModal({
           isOpen: true,
           consumable: scannedConsVal,
@@ -1006,8 +1019,8 @@ function EventPackingPageContent() {
         return;
       }
 
-      setScanError(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
-      alert(`Nie znaleziono kodu: ${cleanSku} w bazie.`);
+      setScanError(`Nie znaleziono kodu: ${cleanCode} w bazie.`);
+      alert(`Nie znaleziono kodu: ${cleanCode} w bazie.`);
     } catch (err) {
       console.error(err);
       setScanError('Błąd podczas odczytu kodu.');

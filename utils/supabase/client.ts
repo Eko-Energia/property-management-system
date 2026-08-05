@@ -31,6 +31,7 @@ export interface DatabaseItem {
   shop_link: string;
   status: 'in_workshop' | 'assigned_to_event' | 'packed';
   category_id?: number | null;
+  barcode?: string | null;
 }
 
 export interface DatabaseConsumable {
@@ -42,6 +43,7 @@ export interface DatabaseConsumable {
   location_id: number | null;
   responsible_person: string | null;
   category_id?: number | null;
+  barcode?: string | null;
 }
 
 export interface DatabaseEventConsumable {

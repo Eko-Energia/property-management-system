@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { QrCode, X, AlertCircle, Camera, Check, HelpCircle, Keyboard } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { QrCode, X, AlertCircle, Camera, Check, HelpCircle, Keyboard, Barcode } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface ScannerButtonProps {
-  onScan: (sku: string) => void;
+  onScan: (scannedCode: string) => void;
   className?: string;
   buttonText?: string;
+  icon?: React.ElementType;
 }
 
-// Utility function to extract SKU ID from input
-export const parseSkuFromInput = (input: string): string | null => {
+// Utility function to extract SKU / Barcode ID from input
+export const parseCodeFromInput = (input: string): string | null => {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
@@ -21,27 +22,24 @@ export const parseSkuFromInput = (input: string): string | null => {
       const url = new URL(trimmed);
       const id = url.searchParams.get('id');
       if (id) {
-        return id.toUpperCase().trim();
+        return id.trim();
       }
     }
   } catch (e) {
-    // Ignore invalid URL structures and fall back to regex
+    // Ignore invalid URL structures and fall back to raw input
   }
 
-  // Regex lookup for SKU format e.g. I-NA-0001 or C-EL-1002 anywhere in the text
-  const skuRegex = /(I|C)-[A-Z]{2,3}-\d{4}/i;
-  const match = trimmed.match(skuRegex);
-  if (match) {
-    return match[0].toUpperCase();
-  }
-
-  return null;
+  return trimmed;
 };
+
+// Backward compatibility alias
+export const parseSkuFromInput = parseCodeFromInput;
 
 export default function ScannerButton({ 
   onScan, 
   className = '', 
-  buttonText = 'Zeskanuj / Wpisz ID' 
+  buttonText = 'Zeskanuj / Wpisz ID',
+  icon: IconComponent
 }: ScannerButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<'camera' | 'manual'>('camera');
@@ -114,20 +112,38 @@ export default function ScannerButton({
           return;
         }
 
-        html5QrCode = new Html5Qrcode(qrRegionId);
+        const supportedFormats = [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+          Html5QrcodeSupportedFormats.ITF
+        ];
+
+        html5QrCode = new Html5Qrcode(qrRegionId, {
+          formatsToSupport: supportedFormats,
+          verbose: false
+        });
+
         await html5QrCode.start(
           { facingMode: 'environment' },
           {
             fps: 10,
             qrbox: (width, height) => {
-              const size = Math.min(width, height) * 0.7;
-              return { width: size, height: size };
+              const boxWidth = Math.min(width * 0.85, 300);
+              const boxHeight = Math.min(height * 0.55, 180);
+              return { width: Math.max(boxWidth, 180), height: Math.max(boxHeight, 120) };
             }
           },
           (decodedText) => {
-            const parsedSku = parseSkuFromInput(decodedText);
-            if (parsedSku) {
-              setSuccessMsg(`Zeskanowano pomyślnie SKU: ${parsedSku}`);
+            const parsedCode = parseCodeFromInput(decodedText);
+            if (parsedCode) {
+              setSuccessMsg(`Zeskanowano pomyślnie kod: ${parsedCode}`);
               setErrorMsg(null);
               // Audio click feedback
               if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -137,19 +153,19 @@ export default function ScannerButton({
               if (html5QrCode) {
                 html5QrCode.stop().then(() => {
                   setTimeout(() => {
-                    onScan(parsedSku);
+                    onScan(parsedCode);
                     setIsOpen(false);
                     resetModal();
-                  }, 600);
+                  }, 500);
                 }).catch(err => {
                   console.error(err);
-                  onScan(parsedSku);
+                  onScan(parsedCode);
                   setIsOpen(false);
                   resetModal();
                 });
               }
             } else {
-              setErrorMsg('Zeskanowany kod nie pasuje do wzorca SKU ani URL dyspozytora.');
+              setErrorMsg('Nie udało się odczytać kodu.');
             }
           },
           () => {
@@ -198,16 +214,16 @@ export default function ScannerButton({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const parsedSku = parseSkuFromInput(manualInput);
-    if (parsedSku) {
-      setSuccessMsg(`Rozpoznano SKU: ${parsedSku}`);
+    const parsedCode = parseCodeFromInput(manualInput);
+    if (parsedCode) {
+      setSuccessMsg(`Rozpoznano kod: ${parsedCode}`);
       setTimeout(() => {
-        onScan(parsedSku);
+        onScan(parsedCode);
         setIsOpen(false);
         resetModal();
-      }, 500);
+      }, 400);
     } else {
-      setErrorMsg('Niepoprawne ID. Wpisz SKU (np. I-NA-0001) lub pełny adres URL dyspozytora.');
+      setErrorMsg('Wpisz kod kreskowy, SKU lub adres URL.');
     }
   };
 
@@ -219,20 +235,24 @@ export default function ScannerButton({
         onClick={() => setIsOpen(true)}
         className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-500 hover:bg-blue-400 text-black shadow-lg shadow-blue-500/10 active:scale-95 transition-all duration-150 ${className}`}
       >
-        <QrCode className="h-4.5 w-4.5 block shrink-0" />
-        <span>{buttonText}</span>
+        {IconComponent ? (
+          <IconComponent className="h-4.5 w-4.5 block shrink-0" />
+        ) : (
+          <QrCode className="h-4.5 w-4.5 block shrink-0" />
+        )}
+        {buttonText ? <span>{buttonText}</span> : null}
       </button>
 
       {/* Modal Viewport */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-850 rounded-2xl w-[96%] max-w-lg md:w-full mx-auto my-auto shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
             
             {/* Modal Header */}
             <div className="p-5 border-b border-zinc-855 flex items-center justify-between">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <QrCode className="h-5 w-5 text-blue-400" />
-                Skaner kodów QR / SKU
+                <Barcode className="h-5 w-5 text-blue-400" />
+                Skaner kodów kreskowych / QR
               </h3>
               <button
                 type="button"
@@ -306,8 +326,8 @@ export default function ScannerButton({
                     {/* Scanner line overlays */}
                     {hasCameraAccess && (
                       <div className="absolute inset-0 pointer-events-none border-[18px] border-black/35 flex items-center justify-center">
-                        {/* Central targeting crosshair */}
-                        <div className="w-[180px] h-[180px] border-2 border-dashed border-blue-400/50 rounded-xl relative">
+                        {/* Central targeting crosshair for 1D and 2D */}
+                        <div className="w-[220px] h-[130px] border-2 border-dashed border-blue-400/50 rounded-xl relative">
                           <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-blue-400 rounded-tl" />
                           <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-blue-400 rounded-tr" />
                           <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-blue-400 rounded-bl" />
@@ -318,7 +338,7 @@ export default function ScannerButton({
                     )}
                   </div>
                   <p className="text-[10px] text-zinc-550 text-center font-medium max-w-xs mx-auto leading-relaxed">
-                    Nakieruj obiektyw kamery na kod QR zasobu, aby zeskanować automatycznie.
+                    Nakieruj obiektyw kamery na kod kreskowy (Code 128, EAN) lub kod QR.
                   </p>
                 </div>
               ) : (
@@ -326,7 +346,7 @@ export default function ScannerButton({
                 <form onSubmit={handleManualSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
-                      Identyfikator SKU lub Link URL
+                      Kod kreskowy, SKU lub Link URL
                     </label>
                     <div className="relative">
                       <input
@@ -335,7 +355,7 @@ export default function ScannerButton({
                         autoFocus
                         value={manualInput}
                         onChange={(e) => setManualInput(e.target.value)}
-                        placeholder="np. I-NA-0001, C-EL-1002 lub wklej adres..."
+                        placeholder="np. 00045, 5901234567890, I-NA-0001..."
                         className="w-full px-3.5 py-2.5 text-sm rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono"
                       />
                     </div>
@@ -373,43 +393,28 @@ export default function ScannerButton({
                 >
                   <span className="flex items-center gap-1.5">
                     <HelpCircle className="h-4 w-4 text-blue-400 shrink-0" />
-                    Jak kodować i drukować kody QR?
+                    Jak używać kodów kreskowych i QR?
                   </span>
                   <span className={`text-[10px] transform transition-transform duration-200 ${accordionOpen ? 'rotate-180' : ''}`}>
                     ▼
                   </span>
                 </button>
-                       {accordionOpen && (
+                {accordionOpen && (
                   <div className="mt-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-300 space-y-4 leading-relaxed animate-in slide-in-from-top-2 duration-200">
                     <p className="text-zinc-300 font-medium">
-                      Nasze kody QR są zoptymalizowane tak, aby można je było skanować <strong className="text-white">bezpośrednio fabrycznym aparatem smartfona</strong> bez konieczności uruchamiania tej aplikacji.
+                      System obsługuje standardowe <strong className="text-white">naklejki z kodami kreskowymi 1D</strong> (np. Code 128, EAN-13, Code 39) oraz <strong className="text-white">kody QR</strong>.
                     </p>
                     <div className="space-y-1.5">
-                      <span className="font-bold text-zinc-200 block">Prawidłowy format linku (URL) w kodzie QR:</span>
-                      <code className="block bg-zinc-950 p-3 rounded-lg border border-zinc-850 text-blue-400 font-mono text-xs select-all break-all leading-normal font-semibold">
-                        {appUrl}/skan?id=[SKU]
-                      </code>
-                      <span className="text-[11px] text-zinc-550 mt-1 block">
-                        Przykład: <strong className="text-zinc-400 font-mono">{appUrl}/skan?id=I-NA-0001</strong>
-                      </span>
+                      <span className="font-bold text-zinc-200 block">Kody kreskowe 1D na przedmiotach:</span>
+                      <p className="text-xs text-zinc-400">
+                        Kod z naklejki (np. <code className="text-blue-400 font-mono font-bold">00045</code>) wpisuje się w pole "Kod kreskowy (Etykieta)" przy tworzeniu lub edycji zasobu.
+                      </p>
                     </div>
                     <div className="space-y-1.5">
-                      <span className="font-bold text-zinc-200 block">Struktura identyfikatora SKU:</span>
-                      <ul className="list-disc pl-5 space-y-2 text-zinc-350">
-                        <li>
-                          <strong className="text-white">Pierwsza litera</strong>: 
-                          <code className="text-blue-300 bg-zinc-950 px-1.5 py-0.5 rounded font-mono text-xs ml-1 font-bold">I</code> (sprzęt trwały - items) lub 
-                          <code className="text-blue-300 bg-zinc-950 px-1.5 py-0.5 rounded font-mono text-xs ml-1 font-bold">C</code> (zużywalne - consumables).
-                        </li>
-                        <li>
-                          <strong className="text-white">Kod kategorii</strong>: 
-                          2-3 litery przypisane w modalu kategorii (np. <code className="text-blue-300 bg-zinc-950 px-1.5 py-0.5 rounded font-mono text-xs font-bold">NA</code> dla narzędzi).
-                        </li>
-                        <li>
-                          <strong className="text-white">Kolejny numer</strong>: 
-                          4-cyfrowy ciąg cyfr (np. <code className="text-blue-300 bg-zinc-950 px-1.5 py-0.5 rounded font-mono text-xs font-bold">0001</code>).
-                        </li>
-                      </ul>
+                      <span className="font-bold text-zinc-200 block">Kody QR na smartfonach:</span>
+                      <code className="block bg-zinc-950 p-3 rounded-lg border border-zinc-850 text-blue-400 font-mono text-xs select-all break-all leading-normal font-semibold">
+                        {appUrl}/skan?id=[KOD_LUB_SKU]
+                      </code>
                     </div>
                   </div>
                 )}
