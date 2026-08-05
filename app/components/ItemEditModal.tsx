@@ -77,17 +77,30 @@ export default function ItemEditModal({
         setItemBarcode(editingItem.barcode || '');
       } else {
         setItemName('');
-        setItemIdInput('');
         setItemLocId('');
         setItemResponsible('');
         setItemLink('');
         setItemStatus('in_workshop');
-        setItemCategoryId('');
         setItemBarcode('');
+
+        const bkCat = categories.find(c => c.code?.toUpperCase() === 'BK' || c.name?.toLowerCase() === 'bez kategorii');
+        const defaultCatId = bkCat ? bkCat.id.toString() : (categories[0] ? categories[0].id.toString() : '');
+        setItemCategoryId(defaultCatId);
+
+        if (defaultCatId) {
+          const catId = parseInt(defaultCatId, 10);
+          if (!isNaN(catId)) {
+            suggestNextSku('I', catId).then(suggested => setItemIdInput(suggested));
+          } else {
+            setItemIdInput('');
+          }
+        } else {
+          setItemIdInput('');
+        }
       }
       setShowAllEventBoxes(false);
     }
-  }, [isOpen, editingItem]);
+  }, [isOpen, editingItem, categories]);
 
 
   const suggestNextSku = async (type: 'I' | 'C', categoryId: number | null): Promise<string> => {
@@ -141,11 +154,13 @@ export default function ItemEditModal({
 
   const handleItemCategoryChange = async (catIdStr: string) => {
     setItemCategoryId(catIdStr);
-    if (!editingItem && catIdStr) {
+    if (catIdStr) {
       const catId = parseInt(catIdStr, 10);
       if (!isNaN(catId)) {
         const suggested = await suggestNextSku('I', catId);
-        setItemIdInput(suggested);
+        if (suggested) {
+          setItemIdInput(suggested);
+        }
       }
     }
   };
@@ -247,6 +262,7 @@ export default function ItemEditModal({
         const { error } = await supabase
           .from('items')
           .update({
+            id: itemIdInput.trim(),
             name: itemName.trim(),
             responsible_person: itemResponsible.trim(),
             shop_link: itemLink.trim(),

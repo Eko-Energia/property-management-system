@@ -132,7 +132,8 @@ function MagazynPageContent() {
     { id: 1, name: 'Elektronika', code: 'EL' },
     { id: 2, name: 'Narzędzia ręczne', code: 'NR' },
     { id: 3, name: 'Materiały montażowe', code: 'MM' },
-    { id: 4, name: 'Pneumatyka', code: 'PN' }
+    { id: 4, name: 'Pneumatyka', code: 'PN' },
+    { id: 99, name: 'Bez kategorii', code: 'BK' }
   ];
 
   const mockItems: ItemWithLocation[] = [
@@ -718,11 +719,13 @@ function MagazynPageContent() {
 
   const handleConsCategoryChange = async (catIdStr: string) => {
     setConsCategoryId(catIdStr);
-    if (!editingConsumable && catIdStr) {
+    if (catIdStr) {
       const catId = parseInt(catIdStr, 10);
       if (!isNaN(catId)) {
         const suggested = await suggestNextSku('C', catId);
-        setConsIdInput(suggested);
+        if (suggested) {
+          setConsIdInput(suggested);
+        }
       }
     }
   };
@@ -764,15 +767,28 @@ function MagazynPageContent() {
   // --- Consumable CRUD Handlers ---
   const openAddConsumableModal = () => {
     setEditingConsumable(null);
-    setConsIdInput('');
     setConsName('');
     setConsQty(0);
     setConsMinQty(1);
     setConsLink('');
     setConsLocId('');
     setConsResponsible('');
-    setConsCategoryId('');
     setConsBarcode('');
+    
+    const bkCat = categories.find(c => c.code?.toUpperCase() === 'BK' || c.name?.toLowerCase() === 'bez kategorii');
+    const defaultCatId = bkCat ? bkCat.id.toString() : (categories[0] ? categories[0].id.toString() : '');
+    setConsCategoryId(defaultCatId);
+
+    if (defaultCatId) {
+      const catId = parseInt(defaultCatId, 10);
+      if (!isNaN(catId)) {
+        suggestNextSku('C', catId).then(suggested => setConsIdInput(suggested));
+      } else {
+        setConsIdInput('');
+      }
+    } else {
+      setConsIdInput('');
+    }
     
     setIsConsumableModalOpen(true);
   };
@@ -812,6 +828,7 @@ function MagazynPageContent() {
       if (editingConsumable) {
         setConsumables(prev => prev.map(c => c.id === editingConsumable.id ? {
           ...c,
+          id: consIdInput.trim(),
           name: consName.trim(),
           quantity_stored: consQty,
           min_quantity: consMinQty,
@@ -853,6 +870,7 @@ function MagazynPageContent() {
         const { error } = await supabase
           .from('consumables')
           .update({
+            id: consIdInput.trim(),
             name: consName.trim(),
             quantity_stored: consQty,
             min_quantity: consMinQty,
@@ -1038,6 +1056,10 @@ function MagazynPageContent() {
     if (!categoryId) return null;
     const cat = categories.find(c => c.id === categoryId);
     if (!cat) return null;
+
+    if (cat.code?.toUpperCase() === 'BK' || cat.name?.toLowerCase() === 'bez kategorii') {
+      return null;
+    }
 
     const colorClasses = [
       'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20',
@@ -1641,6 +1663,13 @@ function MagazynPageContent() {
                             >
                               <Edit2 className="h-3.5 w-3.5" /> Edytuj
                             </button>
+                            <button
+                              onClick={() => handleDeleteConsumable(cons.id)}
+                              className="px-3 flex items-center justify-center py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 transition-colors text-xs font-semibold active:scale-[0.98]"
+                              title="Usuń materiał"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                             {cons.shop_link && (
                               <a
                                 href={cons.shop_link}
@@ -1845,7 +1874,7 @@ function MagazynPageContent() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsConsumableModalOpen(false); }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all animate-in fade-in duration-200"
         >
-          <div className="w-[96%] max-w-xl md:w-full mx-auto my-auto bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="w-[96%] max-w-xl md:w-full mx-auto my-auto max-h-[90vh] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
             <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Boxes className="h-5 w-5 text-blue-400" />
@@ -1859,7 +1888,7 @@ function MagazynPageContent() {
               </button>
             </div>
 
-            <form onSubmit={handleConsumableSubmit} className="p-6 md:p-8 space-y-5">
+            <form onSubmit={handleConsumableSubmit} className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1 max-h-[calc(90vh-80px)]">
               {/* Consumable Name */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
