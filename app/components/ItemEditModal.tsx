@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, DatabaseItem, DatabaseLocation, DatabaseCategory } from '@/utils/supabase/client';
 import SearchableSelect from '@/app/components/SearchableSelect';
 import ScannerButton from '@/app/components/ScannerButton';
-import { X, Package, QrCode, Boxes, Tag, User, ExternalLink, Settings, Barcode } from 'lucide-react';
+import { X, Package, QrCode, Boxes, Tag, User, ExternalLink, Settings, Barcode, Trash2 } from 'lucide-react';
 
 interface ItemWithLocation extends DatabaseItem {
   locations?: {
@@ -23,6 +23,7 @@ interface ItemEditModalProps {
   onSave: () => void;
   itemsList: DatabaseItem[];
   onSaveDemo?: (item: DatabaseItem, isEdit: boolean) => void;
+  onDeleteItem?: (id: string) => void;
 }
 
 export default function ItemEditModal({
@@ -34,7 +35,8 @@ export default function ItemEditModal({
   isDemoMode,
   onSave,
   itemsList,
-  onSaveDemo
+  onSaveDemo,
+  onDeleteItem
 }: ItemEditModalProps) {
   const [itemName, setItemName] = useState('');
   const [itemIdInput, setItemIdInput] = useState('');
@@ -546,22 +548,38 @@ export default function ItemEditModal({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-zinc-800/60">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={modalLoading}
-              className="px-5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-350 hover:bg-zinc-800 hover:text-white font-semibold text-xs active:scale-95 transition-all duration-150 uppercase tracking-wider disabled:opacity-50"
-            >
-              Anuluj
-            </button>
-            <button
-              type="submit"
-              disabled={modalLoading}
-              className="px-6 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-black font-extrabold text-xs active:scale-95 transition-all duration-150 uppercase tracking-wider disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-blue-500/5"
-            >
-              {modalLoading ? 'Zapisywanie...' : 'Zapisz'}
-            </button>
+          <div className="pt-4 flex items-center justify-between gap-3 border-t border-zinc-800/60">
+            {editingItem && onDeleteItem ? (
+              <button
+                type="button"
+                onClick={() => onDeleteItem(editingItem.id)}
+                disabled={modalLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-rose-500/10 text-rose-400 border border-rose-500/25 hover:bg-rose-500/20 active:scale-95 transition-all font-semibold"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Usuń z bazy
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={modalLoading}
+                className="px-5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-350 hover:bg-zinc-800 hover:text-white font-semibold text-xs active:scale-95 transition-all duration-150 uppercase tracking-wider disabled:opacity-50"
+              >
+                Anuluj
+              </button>
+              <button
+                type="submit"
+                disabled={modalLoading}
+                className="px-6 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-black font-extrabold text-xs active:scale-95 transition-all duration-150 uppercase tracking-wider disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-blue-500/5"
+              >
+                {modalLoading ? 'Zapisywanie...' : 'Zapisz'}
+              </button>
+            </div>
           </div>
 
         </form>

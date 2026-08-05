@@ -970,12 +970,14 @@ function MagazynPageContent() {
   };
 
   // Filter lists based on selected location, category & search query
+  const bkCategoryObj = categories.find(c => c.code?.toUpperCase() === 'BK' || c.name?.toLowerCase() === 'bez kategorii');
+
   const filteredItems = items.filter(item => {
     const matchesLoc = selectedLocationId === 'all' || item.location_id === parseInt(selectedLocationId);
     const matchesCat = selectedCategoryId === 'all'
       ? true
-      : selectedCategoryId === 'none'
-      ? item.category_id === null
+      : bkCategoryObj && parseInt(selectedCategoryId) === bkCategoryObj.id
+      ? (item.category_id === bkCategoryObj.id || item.category_id === null)
       : item.category_id === parseInt(selectedCategoryId);
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           item.responsible_person.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -987,8 +989,8 @@ function MagazynPageContent() {
     const matchesLoc = selectedLocationId === 'all' || cons.location_id === parseInt(selectedLocationId);
     const matchesCat = selectedCategoryId === 'all'
       ? true
-      : selectedCategoryId === 'none'
-      ? cons.category_id === null
+      : bkCategoryObj && parseInt(selectedCategoryId) === bkCategoryObj.id
+      ? (cons.category_id === bkCategoryObj.id || cons.category_id === null)
       : cons.category_id === parseInt(selectedCategoryId);
     const matchesSearch = cons.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (cons.responsible_person || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1150,7 +1152,6 @@ function MagazynPageContent() {
                 className="w-full px-4 py-2 text-sm rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 focus:outline-none focus:border-blue-500/50 transition-colors appearance-none bg-none"
               >
                 <option value="all">Wszystkie kategorie</option>
-                <option value="none">Brak kategorii</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id} className="bg-zinc-950 text-zinc-200">
                     {cat.name}
@@ -1423,6 +1424,13 @@ function MagazynPageContent() {
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors text-xs font-semibold active:scale-[0.98]"
                             >
                               <Edit2 className="h-3.5 w-3.5" /> Edytuj
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="px-3 flex items-center justify-center py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 transition-colors text-xs font-semibold active:scale-[0.98]"
+                              title="Usuń przedmiot"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                             {item.shop_link && (
                               <a
@@ -1865,6 +1873,7 @@ function MagazynPageContent() {
               setItems(prev => [...prev, item]);
             }
           }}
+          onDeleteItem={handleDeleteItem}
         />
       )}
 
