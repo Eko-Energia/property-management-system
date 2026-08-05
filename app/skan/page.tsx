@@ -18,33 +18,27 @@ function ScanDispatcher() {
       return;
     }
 
-    const cleanId = rawId.trim().toUpperCase();
+    const searchCode = String(rawId).trim();
+    if (!searchCode) {
+      setErrorMsg('Brak identyfikatora w zeskanowanym linku.');
+      return;
+    }
 
     const checkAndRedirect = async () => {
-      let redirectUrl = `/magazyn?open=${encodeURIComponent(cleanId)}`;
+      let redirectUrl = `/magazyn?open=${encodeURIComponent(searchCode)}`;
 
       // Mock data logic for offline testing/demo mode
       const mockEventItems = ['I-NR-0102', 'I-EL-0103', 'I-NR-0105', 'I-EL-0106'];
-      if (mockEventItems.includes(cleanId)) {
-        redirectUrl = `/zawody/10?open=${encodeURIComponent(cleanId)}`;
+      if (mockEventItems.includes(searchCode.toUpperCase())) {
+        redirectUrl = `/zawody/10?open=${encodeURIComponent(searchCode)}`;
       } else {
         try {
-          // 1. Search items by barcode first, then id
-          const { data: itemByBarcode } = await supabase
+          // 1. Search items by barcode OR id
+          const { data: itemMatch } = await supabase
             .from('items')
             .select('id, status, location_id, locations(type, event_id)')
-            .eq('barcode', cleanId)
+            .or(`barcode.eq.${searchCode},id.eq.${searchCode}`)
             .maybeSingle();
-
-          let itemMatch = itemByBarcode;
-          if (!itemMatch) {
-            const { data: itemById } = await supabase
-              .from('items')
-              .select('id, status, location_id, locations(type, event_id)')
-              .eq('id', cleanId)
-              .maybeSingle();
-            itemMatch = itemById;
-          }
 
           if (itemMatch) {
             const resolvedId = itemMatch.id;
@@ -59,22 +53,12 @@ function ScanDispatcher() {
               }
             }
           } else {
-            // 2. Search consumables by barcode first, then id
-            const { data: consByBarcode } = await supabase
+            // 2. Search consumables by barcode OR id
+            const { data: consMatch } = await supabase
               .from('consumables')
               .select('id, location_id, locations(type, event_id)')
-              .eq('barcode', cleanId)
+              .or(`barcode.eq.${searchCode},id.eq.${searchCode}`)
               .maybeSingle();
-
-            let consMatch = consByBarcode;
-            if (!consMatch) {
-              const { data: consById } = await supabase
-                .from('consumables')
-                .select('id, location_id, locations(type, event_id)')
-                .eq('id', cleanId)
-                .maybeSingle();
-              consMatch = consById;
-            }
 
             if (consMatch) {
               const resolvedId = consMatch.id;

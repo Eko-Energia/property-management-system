@@ -233,10 +233,11 @@ function MagazynPageContent() {
     const openSku = searchParams.get('open');
     if (!openSku) return;
 
-    const upperCode = openSku.toUpperCase().trim();
+    const searchCode = String(openSku).trim();
+    const upperCode = searchCode.toUpperCase();
 
-    // Check in items list by barcode first, fallback to id (SKU)
-    const matchedItem = items.find(i => (i.barcode && i.barcode.trim().toUpperCase() === upperCode) || i.id.toUpperCase() === upperCode);
+    // Check in items list by barcode or id (SKU)
+    const matchedItem = items.find(i => (i.barcode && String(i.barcode).trim() === searchCode) || i.id.toUpperCase() === upperCode);
     if (matchedItem) {
       setActiveTab('items');
       openEditItemModal(matchedItem);
@@ -244,8 +245,8 @@ function MagazynPageContent() {
       return;
     }
 
-    // Check in consumables list by barcode first, fallback to id (SKU)
-    const matchedConsumable = consumables.find(c => (c.barcode && c.barcode.trim().toUpperCase() === upperCode) || c.id.toUpperCase() === upperCode);
+    // Check in consumables list by barcode or id (SKU)
+    const matchedConsumable = consumables.find(c => (c.barcode && String(c.barcode).trim() === searchCode) || c.id.toUpperCase() === upperCode);
     if (matchedConsumable) {
       setActiveTab('consumables');
       openEditConsumableModal(matchedConsumable);
@@ -256,12 +257,12 @@ function MagazynPageContent() {
 
   // Handler for scans made using ScannerButton inside app
   const handleBarcodeScan = (scannedCode: string) => {
-    const upperCode = scannedCode.toUpperCase().trim();
+    const searchCode = String(scannedCode).trim();
+    if (!searchCode) return;
+    const upperCode = searchCode.toUpperCase();
 
-    // Check in items by barcode first, fallback to id (SKU)
-    const itemByBarcode = items.find(i => i.barcode && i.barcode.trim().toUpperCase() === upperCode);
-    const itemById = items.find(i => i.id.toUpperCase() === upperCode);
-    const item = itemByBarcode || itemById;
+    // Check in items by barcode or id (SKU)
+    const item = items.find(i => (i.barcode && String(i.barcode).trim() === searchCode) || i.id.toUpperCase() === upperCode);
 
     if (item) {
       setActiveTab('items');
@@ -270,10 +271,8 @@ function MagazynPageContent() {
       return;
     }
 
-    // Check in consumables by barcode first, fallback to id (SKU)
-    const consByBarcode = consumables.find(c => c.barcode && c.barcode.trim().toUpperCase() === upperCode);
-    const consById = consumables.find(c => c.id.toUpperCase() === upperCode);
-    const cons = consByBarcode || consById;
+    // Check in consumables by barcode or id (SKU)
+    const cons = consumables.find(c => (c.barcode && String(c.barcode).trim() === searchCode) || c.id.toUpperCase() === upperCode);
 
     if (cons) {
       setActiveTab('consumables');
@@ -282,7 +281,7 @@ function MagazynPageContent() {
       return;
     }
 
-    showToast(`Nie znaleziono kodu "${scannedCode}" w magazynie.`, 'error');
+    showToast(`Nie znaleziono kodu "${searchCode}" w magazynie.`, 'error');
   };
 
   // --- Location Picker Event handlers (Default Opiekun resolution) ---
@@ -1234,7 +1233,7 @@ function MagazynPageContent() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider select-none">
-                          <th className="py-3 px-4 w-16 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('id')}>
+                          <th className="py-3 px-4 min-w-[145px] whitespace-nowrap cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('id')}>
                             <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
                           </th>
                           <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortItems('name')}>
@@ -1271,7 +1270,17 @@ function MagazynPageContent() {
                               key={item.id} 
                               className="hover:bg-zinc-900/30 transition-colors duration-150"
                             >
-                              <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{item.id}</td>
+                              <td className="py-3.5 px-4 font-mono text-xs text-zinc-400 whitespace-nowrap min-w-[145px]">
+                                <div className="flex flex-col gap-1 items-start whitespace-nowrap">
+                                  <span className="font-semibold text-zinc-300">#{item.id}</span>
+                                  {item.barcode && (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-sans font-semibold whitespace-nowrap">
+                                      <Barcode className="w-3 h-3 text-emerald-400 shrink-0" />
+                                      Kod: {item.barcode}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td className="py-3.5 px-4 font-semibold text-zinc-100">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span>{item.name}</span>
@@ -1348,7 +1357,15 @@ function MagazynPageContent() {
                         <div key={`item-card-${item.id}`} className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-4 space-y-3">
                           <div className="flex items-start justify-between gap-2">
                             <div className="space-y-1">
-                              <div className="font-mono text-[10px] text-zinc-550">#{item.id}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-[10px] text-zinc-550">#{item.id}</span>
+                                {item.barcode && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-emerald-400 border border-emerald-500/30 font-sans font-semibold">
+                                    <Barcode className="w-3 h-3 text-emerald-400" />
+                                    Kod: {item.barcode}
+                                  </span>
+                                )}
+                              </div>
                               <div className="font-bold text-zinc-100 text-sm leading-tight">{item.name}</div>
                               <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                 {renderCategoryBadge(item.category_id)}
@@ -1417,7 +1434,7 @@ function MagazynPageContent() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-zinc-800 bg-zinc-900/30 text-zinc-400 text-xs font-semibold uppercase tracking-wider select-none">
-                          <th className="py-3 px-4 w-16 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('id')}>
+                          <th className="py-3 px-4 min-w-[145px] whitespace-nowrap cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('id')}>
                             <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
                           </th>
                           <th className="py-3 px-4 cursor-pointer hover:bg-zinc-900/50 hover:text-white transition-colors" onClick={() => handleSortCons('name')}>
@@ -1453,7 +1470,17 @@ function MagazynPageContent() {
                                   : ''
                               }`}
                             >
-                              <td className="py-3.5 px-4 font-mono text-xs text-zinc-500">#{cons.id}</td>
+                              <td className="py-3.5 px-4 font-mono text-xs text-zinc-400 whitespace-nowrap min-w-[145px]">
+                                <div className="flex flex-col gap-1 items-start whitespace-nowrap">
+                                  <span className="font-semibold text-zinc-300">#{cons.id}</span>
+                                  {cons.barcode && (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-sans font-semibold whitespace-nowrap">
+                                      <Barcode className="w-3 h-3 text-emerald-400 shrink-0" />
+                                      Kod: {cons.barcode}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td className="py-3.5 px-4 font-semibold text-zinc-100">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span>{cons.name}</span>
@@ -1553,7 +1580,15 @@ function MagazynPageContent() {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="space-y-1">
-                              <div className="font-mono text-[10px] text-zinc-550">#{cons.id}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-[10px] text-zinc-550">#{cons.id}</span>
+                                {cons.barcode && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-emerald-400 border border-emerald-500/30 font-sans font-semibold">
+                                    <Barcode className="w-3 h-3 text-emerald-400" />
+                                    Kod: {cons.barcode}
+                                  </span>
+                                )}
+                              </div>
                               <div className="font-bold text-zinc-100 text-sm leading-tight">{cons.name}</div>
                               <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                 {renderCategoryBadge(cons.category_id)}
@@ -1891,7 +1926,9 @@ function MagazynPageContent() {
                     icon={Barcode}
                     className="!px-3.5 !py-2.5 bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 rounded-lg shrink-0 flex items-center justify-center"
                     onScan={(scannedCode) => {
-                      setConsBarcode(scannedCode);
+                      if (scannedCode) {
+                        setConsBarcode(String(scannedCode).trim());
+                      }
                     }}
                   />
                 </div>

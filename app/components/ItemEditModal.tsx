@@ -381,7 +381,9 @@ export default function ItemEditModal({
                 icon={Barcode}
                 className="!px-3.5 !py-2.5 bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 rounded-lg shrink-0 flex items-center justify-center"
                 onScan={(scannedCode) => {
-                  setItemBarcode(scannedCode);
+                  if (scannedCode) {
+                    setItemBarcode(String(scannedCode).trim());
+                  }
                 }}
               />
             </div>

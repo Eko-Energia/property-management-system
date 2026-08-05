@@ -959,46 +959,22 @@ function EventPackingPageContent() {
     }
 
     try {
-      let scannedItemVal = null;
-      let scannedConsVal = null;
-
-      // 1. Search items by barcode
-      const { data: itemByBarcode } = await supabase
+      // 1. Search items by barcode OR id
+      const { data: scannedItemVal } = await supabase
         .from('items')
         .select('*, locations(type, event_id)')
-        .eq('barcode', cleanCode)
+        .or(`barcode.eq.${cleanCode},id.eq.${cleanCode}`)
         .maybeSingle();
 
-      if (itemByBarcode) {
-        scannedItemVal = itemByBarcode;
-      } else {
-        // Fallback to search items by id (SKU)
-        const { data: itemById } = await supabase
-          .from('items')
-          .select('*, locations(type, event_id)')
-          .eq('id', cleanCode)
-          .maybeSingle();
-        scannedItemVal = itemById;
-      }
-
-      // 2. If not found in items, search consumables by barcode then id
+      let scannedConsVal = null;
       if (!scannedItemVal) {
-        const { data: consByBarcode } = await supabase
+        // 2. Search consumables by barcode OR id
+        const { data: consData } = await supabase
           .from('consumables')
           .select('*')
-          .eq('barcode', cleanCode)
+          .or(`barcode.eq.${cleanCode},id.eq.${cleanCode}`)
           .maybeSingle();
-
-        if (consByBarcode) {
-          scannedConsVal = consByBarcode;
-        } else {
-          const { data: consById } = await supabase
-            .from('consumables')
-            .select('*')
-            .eq('id', cleanCode)
-            .maybeSingle();
-          scannedConsVal = consById;
-        }
+        scannedConsVal = consData;
       }
 
       if (scannedItemVal) {
