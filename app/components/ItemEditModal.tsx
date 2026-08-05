@@ -369,6 +369,7 @@ export default function ItemEditModal({
                   <Barcode className="w-5 h-5 block shrink-0" />
                 </span>
                 <input
+                  id="barcode-input"
                   type="text"
                   placeholder="Zeskanuj lub wpisz kod z naklejki (np. 00045)..."
                   value={itemBarcode}
@@ -382,7 +383,15 @@ export default function ItemEditModal({
                 className="!px-3.5 !py-2.5 bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 rounded-lg shrink-0 flex items-center justify-center"
                 onScan={(scannedCode) => {
                   if (scannedCode) {
-                    setItemBarcode(String(scannedCode).trim());
+                    const cleanCode = String(scannedCode).trim();
+                    setItemBarcode(cleanCode);
+                    setTimeout(() => {
+                      const input = document.getElementById('barcode-input') as HTMLInputElement;
+                      if (input) {
+                        input.value = cleanCode;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
+                    }, 50);
                   }
                 }}
               />

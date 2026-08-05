@@ -65,7 +65,7 @@ export default function ScannerButton({
     }
   }, [isOpen]);
 
-  // Scroll Lock & Back Button Interceptor
+  // Scroll Lock
   useEffect(() => {
     if (!isOpen) return;
 
@@ -73,22 +73,8 @@ export default function ScannerButton({
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Intercept back button
-    window.history.pushState({ modalOpen: true }, '', window.location.href);
-
-    const handlePopState = () => {
-      setIsOpen(false);
-      resetModal();
-    };
-
-    window.addEventListener('popstate', handlePopState);
-
     return () => {
       document.body.style.overflow = originalOverflow;
-      window.removeEventListener('popstate', handlePopState);
-      if (window.history.state?.modalOpen) {
-        window.history.back();
-      }
     };
   }, [isOpen]);
 
@@ -143,27 +129,47 @@ export default function ScannerButton({
           (decodedText) => {
             const parsedCode = parseCodeFromInput(decodedText);
             if (parsedCode) {
-              setSuccessMsg(`Zeskanowano pomyślnie kod: ${parsedCode}`);
+              const cleanCode = String(parsedCode).trim();
+              setSuccessMsg(`Zeskanowano pomyślnie kod: ${cleanCode}`);
               setErrorMsg(null);
-              // Audio click feedback
+
+              // Audio / haptic feedback
               if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-                navigator.vibrate(100);
+                try {
+                  navigator.vibrate(100);
+                } catch (e) {
+                  // ignore
+                }
               }
-              // Stop camera and trigger callback
-              if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                  setTimeout(() => {
-                    onScan(parsedCode);
-                    setIsOpen(false);
-                    resetModal();
-                  }, 500);
-                }).catch(err => {
-                  console.error(err);
-                  onScan(parsedCode);
-                  setIsOpen(false);
-                  resetModal();
-                });
+
+              // 1. Pause scanning immediately so camera stream frame parsing stops
+              if (html5QrCode && html5QrCode.isScanning) {
+                try {
+                  html5QrCode.pause();
+                } catch (e) {
+                  // ignore
+                }
               }
+
+              // 2. Execute onScan callback immediately
+              onScan(cleanCode);
+
+              // 3. Close ONLY the scanner overlay
+              setIsOpen(false);
+
+              // 4. Asynchronously stop camera stream in background so teardown does not reset React parent state
+              setTimeout(() => {
+                if (html5QrCode) {
+                  try {
+                    if (html5QrCode.isScanning) {
+                      html5QrCode.stop().catch(err => console.error('Error stopping scanner:', err));
+                    }
+                  } catch (e) {
+                    // ignore
+                  }
+                }
+                resetModal();
+              }, 300);
             } else {
               setErrorMsg('Nie udało się odczytać kodu.');
             }
