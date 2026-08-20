@@ -150,13 +150,13 @@ export default function ScannerButton({
         try {
           supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
         } catch (e) {
-          supportedFormats = ['code_128', 'code_39', 'ean_13', 'qr_code', 'upc_a'];
+          supportedFormats = ['code_128', 'qr_code'];
         }
 
-        const desiredFormats = ['code_128', 'code_39', 'ean_13', 'qr_code', 'upc_a', 'upc_e', 'itf'];
+        const desiredFormats = ['code_128', 'qr_code'];
         const formatsToUse = desiredFormats.filter(f => supportedFormats.includes(f));
         const detector = new (window as any).BarcodeDetector({
-          formats: formatsToUse.length > 0 ? formatsToUse : ['code_128', 'ean_13', 'qr_code']
+          formats: formatsToUse.length > 0 ? formatsToUse : ['code_128', 'qr_code']
         });
 
         // Request 1080p/720p resolution and continuous autofocus
@@ -231,10 +231,9 @@ export default function ScannerButton({
           return;
         }
 
+        // Strict Formats Whitelist: Allow EXCLUSIVELY CODE_128 and QR_CODE to prevent false positives
         const supportedFormats = [
           Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.QR_CODE
         ];
 
