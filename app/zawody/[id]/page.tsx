@@ -367,6 +367,42 @@ function EventPackingPageContent() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto Revalidate on Window Focus & Tab Switch
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+
+    // Supabase Realtime Channel: Instant live updates when any user updates event packing
+    const channel = supabase
+      .channel(`event-${eventId}-changes`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'consumables' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_consumables' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 

@@ -184,6 +184,39 @@ function MagazynPageContent() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto Revalidate on Window Focus & Tab Switch
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+
+    // Supabase Realtime Channel: Instant live updates when any user edits database
+    const channel = supabase
+      .channel('magazyn-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'consumables' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

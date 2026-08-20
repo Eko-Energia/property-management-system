@@ -63,6 +63,30 @@ export default function ZawodyPage() {
 
   useEffect(() => {
     fetchEvents();
+
+    // Auto Revalidate on Window Focus & Tab Switch
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchEvents();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+
+    // Supabase Realtime Channel: Instant live updates when any user edits events
+    const channel = supabase
+      .channel('events-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+        fetchEvents();
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
