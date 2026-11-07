@@ -199,6 +199,7 @@ export type Database = {
       is_member: { Args: Record<string, never>; Returns: boolean };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       join_club: { Args: { p_code: string }; Returns: Database['public']['Enums']['user_role'] };
+      ensure_profile: { Args: Record<string, never>; Returns: Database['public']['Tables']['profiles']['Row'] };
       next_sku: { Args: { p_kind: string; p_category_id: number | null }; Returns: string };
       lookup_code: {
         Args: { p_code: string };

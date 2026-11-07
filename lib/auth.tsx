@@ -13,6 +13,9 @@ type AuthState = {
   /** true until the first session check finished */
   loading: boolean;
   profile: Profile | null;
+  /** profile could not be loaded (signed in, but the app cannot tell the role) */
+  profileError: unknown;
+  retryProfile: () => void;
   isMember: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
@@ -44,9 +47,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: [...qk.me, user?.id],
     enabled: Boolean(user),
     queryFn: async () => {
-      const { data, error } = await getSupabase().from('profiles').select('*').eq('id', user!.id).maybeSingle();
+      const supabase = getSupabase();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user!.id).maybeSingle();
       if (error) throw error;
-      return data;
+      if (data) return data;
+      // account created without a profile (e.g. before the sign-up trigger existed)
+      const { data: created, error: rpcError } = await supabase.rpc('ensure_profile');
+      if (rpcError) throw rpcError;
+      return created as Profile;
     },
   });
 
@@ -56,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading: loading || (Boolean(user) && profileQuery.isPending),
       profile,
+      profileError: profileQuery.error,
+      retryProfile: () => void profileQuery.refetch(),
       isMember: profile?.role === 'member' || profile?.role === 'admin',
       isAdmin: profile?.role === 'admin',
       signOut: async () => {
@@ -65,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.refresh();
       },
     };
-  }, [user, loading, profileQuery.data, profileQuery.isPending, qc, router]);
+  }, [user, loading, profileQuery, qc, router]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

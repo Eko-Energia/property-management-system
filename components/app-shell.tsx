@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { useStats } from '@/lib/data/queries';
 import { GlobalScanButton } from '@/components/global-scan';
 import { cn } from '@/components/ui/cn';
+import { ErrorState } from '@/components/ui/misc';
 
 const NAV = [
   { href: '/', label: 'Start', icon: Home },
@@ -25,7 +26,7 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, loading, isMember, isAdmin, signOut } = useAuth();
+  const { user, profile, profileError, retryProfile, loading, isMember, isAdmin, signOut } = useAuth();
   const stats = useStats(isMember);
   const bare = BARE_ROUTES.some((r) => pathname.startsWith(r));
 
@@ -42,6 +43,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [loading, user, profile, isMember, bare, pathname, router]);
 
   if (bare) return <main className="min-h-dvh">{children}</main>;
+
+  if (!loading && user && profileError) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-3 text-center">
+          <ErrorState error={profileError} onRetry={retryProfile} />
+          <button onClick={signOut} className="text-sm text-zinc-400 underline underline-offset-2 hover:text-zinc-200">
+            Wyloguj się
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !isMember) {
     return (
