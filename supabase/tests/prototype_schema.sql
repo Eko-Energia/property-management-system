@@ -20,25 +20,27 @@ create table public.locations (
   responsible_person text,
   room               text
 );
+-- prod tables were recreated by hand, so constraint names carry a "1" suffix
+-- (items_pkey1, items_location_id_fkey1, ...); migrations must not rely on names
 create table public.items (
-  id                 text primary key,
+  id                 text constraint items_pkey1 primary key,
   name               text not null,
-  location_id        bigint references public.locations (id) on update cascade on delete set null,
+  location_id        bigint constraint items_location_id_fkey1 references public.locations (id) on update cascade on delete set null,
   responsible_person text,
   shop_link          text,
   status             text,
-  category_id        bigint references public.categories (id) on update cascade on delete set null,
+  category_id        bigint constraint items_category_id_fkey1 references public.categories (id) on update cascade on delete set null,
   barcode            text unique
 );
 create table public.consumables (
-  id                 text primary key,
+  id                 text constraint consumables_pkey1 primary key,
   name               text not null,
   quantity_stored    bigint not null,
   min_quantity       bigint not null,
   shop_link          text,
-  location_id        bigint references public.locations (id) on update cascade on delete set null,
+  location_id        bigint constraint consumables_location_id_fkey1 references public.locations (id) on update cascade on delete set null,
   responsible_person text,
-  category_id        bigint references public.categories (id) on update cascade on delete set null,
+  category_id        bigint constraint consumables_category_id_fkey1 references public.categories (id) on update cascade on delete set null,
   barcode            text unique
 );
 create table public.event_consumables (
