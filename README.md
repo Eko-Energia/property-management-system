@@ -8,7 +8,7 @@ Działa w przeglądarce na telefonie i komputerze; można ją dodać do ekranu g
 ## Dla członków koła
 
 1. **Konto:** „Kontynuuj z Google” albo email + hasło. Logujesz się raz na urządzeniu.
-2. **Kod koła:** przy pierwszym logowaniu wpisz kod od zarządu (albo otwórz link zaproszenia z grupy).
+2. **Kod koła:** przy pierwszym logowaniu wpisz aktualny kod koła. Ma go każdy członek w Ustawieniach, zmienia się co 15 minut. Tym samym kodem ustawisz nowe hasło, gdy zapomnisz starego (aplikacja nie wysyła maili).
 3. **Skanuj:** niebieski przycisk na dole ekranu. Zeskanowanie naklejki otwiera przedmiot tam, gdzie akurat jest (magazyn albo wyjazd).
    Nowa naklejka z rolki → „Nowy sprzęt / Nowy materiał / Przypisz do istniejącego”.
 
@@ -19,7 +19,9 @@ Działa w przeglądarce na telefonie i komputerze; można ją dodać do ekranu g
 | **Magazyn** | Sprzęt (każdy egzemplarz osobno) i materiały (liczone w sztukach, szybkie ±). Filtry, „pod moją opieką”, historia zmian każdej rzeczy |
 | **Wyjazdy** | Wyjazd → skrzynie → pakowanie skanerem (seria skanów bez zamykania kamery) → po powrocie rozliczenie: co wróciło, co zginęło, ile materiałów zużyto |
 | **Zakupy** | Braki trafiają tu automatycznie. Własne zgłoszenia, „zamówione”, „przyjmij dostawę” (stan rośnie sam) |
-| **Ustawienia** | Profil, miejsca w magazynie, kategorie; admin: kod koła i role |
+| **Ustawienia** | Profil i hasło, kod koła, lista członków (kto jest adminem); admin: role, usuwanie kont, unieważnianie kodu |
+
+Pełna instrukcja w slajdach: [docs/guide/Magazyn-Eko-Energia-instrukcja.pdf](docs/guide/Magazyn-Eko-Energia-instrukcja.pdf) (źródło: `docs/guide/user-guide.html`).
 
 ### Etykiety
 
@@ -38,6 +40,7 @@ npm run check     # typecheck + lint + testy (unit + migracje/RLS/RPC na PGlite)
 
 Stack: Next.js 16 · React 19 · TanStack Query · Supabase (Postgres, Auth, Realtime, RLS) · Vercel.
 
+- [docs/HANDOVER.md](docs/HANDOVER.md): **start tutaj** przy przejmowaniu projektu: mapa usług, sekrety, przekazanie kont GitHub/Vercel/Supabase/Google Cloud, backup
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): jak to jest zbudowane i dlaczego
 - [docs/DATABASE.md](docs/DATABASE.md): schemat, RPC, automatyzacje, jak zmieniać schemat
 - [docs/OPERATIONS.md](docs/OPERATIONS.md): konfiguracja Supabase/Vercel, pierwsze uruchomienie, backupy

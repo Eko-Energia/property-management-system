@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Magazyn Eko-Energia: jak korzystać</title>
+<!--
+  Źródło prezentacji dla członków koła. PDF generuje:
+  msedge --headless --disable-gpu --no-pdf-header-footer --print-to-pdf="docs/guide/Magazyn-Eko-Energia-instrukcja.pdf" "file:///…/docs/guide/user-guide.html"
+-->
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  :root {
+    --bg: #09090b; --panel: #18181b; --panel2: #27272a; --line: #3f3f46;
+    --text: #fafafa; --muted: #a1a1aa; --dim: #71717a;
+    --green: #34d399; --blue: #3b82f6; --blue2: #93c5fd; --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--text); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .slide { width: 1280px; height: 720px; padding: 64px 80px; position: relative; overflow: hidden; page-break-after: always; break-after: page; display: flex; flex-direction: column; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .slide::after { content: attr(data-n); position: absolute; right: 48px; bottom: 32px; font-size: 14px; color: var(--dim); }
+  .kicker { font-size: 15px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--green); margin-bottom: 14px; }
+  h1 { font-size: 64px; line-height: 1.05; font-weight: 700; letter-spacing: -.02em; }
+  h2 { font-size: 44px; line-height: 1.1; font-weight: 700; letter-spacing: -.015em; margin-bottom: 28px; }
+  h3 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+  p, li { font-size: 21px; line-height: 1.5; color: #d4d4d8; }
+  b { color: var(--text); font-weight: 600; }
+  .muted { color: var(--muted); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; align-items: center; }
+  .cols.wide-left { grid-template-columns: 1.25fr 1fr; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .card { background: var(--panel); border: 1px solid #27272a; border-radius: 20px; padding: 26px 28px; }
+  .card p { font-size: 18px; }
+  ul.clean { list-style: none; display: grid; gap: 14px; }
+  ul.clean li { padding-left: 34px; position: relative; }
+  ul.clean li::before { content: ""; position: absolute; left: 4px; top: 12px; width: 12px; height: 12px; border-radius: 4px; background: var(--green); }
+  ol.steps { list-style: none; counter-reset: s; display: grid; gap: 16px; }
+  ol.steps li { counter-increment: s; padding-left: 52px; position: relative; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 12px; background: rgba(59,130,246,.18); color: var(--blue2); font-weight: 700; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 15px; font-weight: 600; background: var(--panel2); color: #e4e4e7; border: 1px solid var(--line); }
+  .pill.green { background: rgba(52,211,153,.12); color: #6ee7b7; border-color: rgba(52,211,153,.35); }
+  .pill.blue { background: rgba(59,130,246,.15); color: var(--blue2); border-color: rgba(59,130,246,.4); }
+  .pill.amber { background: rgba(251,191,36,.12); color: #fcd34d; border-color: rgba(251,191,36,.35); }
+  .pill.red { background: rgba(248,113,113,.12); color: #fca5a5; border-color: rgba(248,113,113,.35); }
+  .mono { font-family: Consolas, "Cascadia Mono", monospace; }
+  .tip { margin-top: auto; border-left: 4px solid var(--amber); background: rgba(251,191,36,.07); padding: 14px 20px; border-radius: 0 14px 14px 0; font-size: 18px; color: #fde68a; }
+  .tip b { color: #fef3c7; }
+
+  /* --- phone mockup --- */
+  .phone { width: 290px; height: 470px; border-radius: 40px; border: 10px solid #27272a; background: #0c0c0f; position: relative; overflow: hidden; margin: 0 auto; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .phone .top { height: 54px; border-bottom: 1px solid #27272a; display: flex; align-items: center; padding: 0 18px; gap: 10px; font-weight: 600; font-size: 15px; }
+  .logo { width: 26px; height: 26px; border-radius: 8px; background: rgba(52,211,153,.15); display: inline-flex; align-items: center; justify-content: center; }
+  .logo i { width: 12px; height: 12px; border: 2px solid var(--green); border-radius: 3px; }
+  .phone .body { padding: 14px; display: grid; gap: 10px; }
+  .row { background: #18181b; border-radius: 12px; padding: 10px 12px; font-size: 13px; color: #e4e4e7; }
+  .row small { display: block; font-size: 11px; color: var(--dim); margin-top: 2px; font-family: Consolas, monospace; }
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; height: 74px; border-top: 1px solid #27272a; background: #09090b; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; text-align: center; font-size: 11px; color: var(--dim); }
+  .nav .on { color: var(--text); }
+  .nav .ico { width: 18px; height: 18px; border-radius: 5px; border: 2px solid currentColor; margin: 0 auto 4px; }
+  .nav .on .ico { border-color: var(--blue); }
+  .fab { width: 58px; height: 58px; border-radius: 50%; background: var(--blue); margin: -26px auto 0; box-shadow: 0 8px 24px rgba(59,130,246,.5); display: flex; align-items: center; justify-content: center; }
+  .scanframe { width: 26px; height: 20px; position: relative; }
+  .scanframe::before, .scanframe::after { content: ""; position: absolute; inset: 0; border: 3px solid #fff; border-radius: 4px; clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 100% 0, 100% 100%, 65% 100%, 65% 0); }
+  .scanframe i { position: absolute; left: 3px; right: 3px; top: 50%; height: 2px; background: #fff; }
+  .callout { position: absolute; background: var(--amber); color: #18181b; font-weight: 700; font-size: 14px; padding: 6px 12px; border-radius: 10px; }
+
+  /* --- flow --- */
+  .flow { display: flex; align-items: stretch; gap: 14px; }
+  .flow .step { flex: 1; background: var(--panel); border: 1px solid #27272a; border-radius: 18px; padding: 22px; }
+  .flow .step h3 { font-size: 20px; }
+  .flow .step p { font-size: 16px; }
+  .flow .arrow { align-self: center; color: var(--dim); font-size: 30px; }
+  .label-chip { display: inline-flex; flex-direction: column; align-items: center; background: #fff; color: #111; border-radius: 10px; padding: 10px 16px 6px; font-family: Consolas, monospace; font-size: 15px; }
+  .bars { height: 36px; width: 150px; background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px, #111 4px 7px, transparent 7px 9px, #111 9px 10px, transparent 10px 13px); margin-bottom: 4px; }
+
+  /* --- small UI pieces --- */
+  .seg { display: inline-flex; background: #09090b; border: 1px solid #27272a; border-radius: 12px; padding: 4px; gap: 2px; }
+  .seg span { padding: 7px 14px; border-radius: 9px; font-size: 15px; color: var(--dim); font-weight: 600; }
+  .seg .g { background: rgba(251,191,36,.15); color: #fde68a; }
+  .seg .m { background: #3f3f46; color: #fff; }
+  .seg .a { background: rgba(59,130,246,.25); color: #dbeafe; }
+  .field { background: #18181b; border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 16px; color: var(--dim); margin-bottom: 10px; }
+  .field.code { text-align: center; letter-spacing: .3em; color: var(--text); font-family: Consolas, monospace; font-size: 20px; }
+  .btn { background: var(--blue); color: #fff; border-radius: 12px; padding: 12px; text-align: center; font-weight: 600; font-size: 16px; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stepper span { width: 38px; text-align: center; padding: 6px 0; color: #d4d4d8; font-weight: 700; }
+  .stepper b { min-width: 54px; text-align: center; }
+  .progress { height: 12px; border-radius: 999px; background: #27272a; overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 68%; background: var(--green); border-radius: 999px; }
+  .cover { background: radial-gradient(900px 500px at 85% 20%, rgba(52,211,153,.14), transparent 60%), radial-gradient(700px 500px at 0% 100%, rgba(59,130,246,.12), transparent 60%), var(--bg); justify-content: center; }
+  .cover::after { display: none; }
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<section class="slide cover" data-n="1">
+  <div class="logo" style="width:64px;height:64px;border-radius:18px;margin-bottom:32px"><i style="width:26px;height:26px;border-width:4px;border-radius:6px"></i></div>
+  <div class="kicker">Koło naukowe Eko-Energia</div>
+  <h1>Magazyn koła<br>jak z niego korzystać</h1>
+  <p class="muted" style="margin-top:24px;font-size:24px;max-width:760px">Sprzęt, materiały, pakowanie na wyjazdy i zakupy w jednej aplikacji. Działa w przeglądarce na telefonie i komputerze.</p>
+  <p style="margin-top:48px;font-size:22px"><span class="pill green">ekoenergia-pms.vercel.app</span></p>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-n="2">
+  <div class="kicker">Po co to jest</div>
+  <h2>Jedno miejsce zamiast arkuszy i pamięci</h2>
+  <div class="grid2" style="flex:1">
+    <div class="card"><h3>Magazyn</h3><p>Co mamy, gdzie leży i kto się tym opiekuje. Sprzęt trwały i materiały zużywalne.</p></div>
+    <div class="card"><h3>Skaner etykiet</h3><p>Zeskanuj naklejkę telefonem i od razu widzisz, co to jest i gdzie powinno wrócić.</p></div>
+    <div class="card"><h3>Wyjazdy</h3><p>Skrzynie, pakowanie skanerem, a po powrocie rozliczenie, co wróciło, a co zginęło.</p></div>
+    <div class="card"><h3>Zakupy</h3><p>Braki materiałów same trafiają na listę. Po dostawie stan magazynu rośnie automatycznie.</p></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-n="3">
+  <div class="kicker">Pierwsze wejście</div>
+  <h2>Konto w minutę</h2>
+  <div class="cols wide-left">
+    <ol class="steps">
+      <li><b>Wejdź na stronę</b> i wybierz <b>Kontynuuj z Google</b> albo załóż konto emailem i hasłem.</li>
+      <li><b>Wpisz kod koła.</b> Ma go każdy członek w Ustawieniach. Kod <b>zmienia się co 15 minut</b>, więc poproś o aktualny.</li>
+      <li><b>Przejdź samouczek</b> (5 krótkich kroków). Możesz go otworzyć ponownie w Ustawieniach.</li>
+      <li><b>Dodaj aplikację do ekranu głównego</b> telefonu: w przeglądarce „Dodaj do ekranu głównego”, wtedy otwiera się jak zwykła aplikacja.</li>
+    </ol>
+    <div class="card" style="max-width:380px;justify-self:center">
+      <h3 style="margin-bottom:16px">Dołącz do koła</h3>
+      <div class="field code">3FA9C1</div>
+      <div class="btn">Dołącz</div>
+      <p class="muted" style="font-size:15px;margin-top:14px">Admin koła: imię i nazwisko widać pod polem, żeby wiedzieć, kogo zapytać.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-n="4">
+  <div class="kicker">Nawigacja</div>
+  <h2>Wszystko pod kciukiem</h2>
+  <div class="cols">
+    <div>
+      <ul class="clean">
+        <li><b>Start</b>: podsumowanie, czego brakuje, wyjazdy w toku, ostatnie zmiany.</li>
+        <li><b>Magazyn</b>: sprzęt, materiały, miejsca i kategorie.</li>
+        <li><b>Niebieski przycisk w środku</b>: skaner etykiet, dostępny z każdego ekranu.</li>
+        <li><b>Wyjazdy</b>: pakowanie i rozliczanie skrzyń.</li>
+        <li><b>Zakupy</b>: lista do zamówienia i to, co jest w drodze.</li>
+      </ul>
+      <p class="muted" style="margin-top:22px;font-size:18px">Na komputerze to samo jest w górnym pasku. Okna zamykasz krzyżykiem, kliknięciem obok, klawiszem Esc albo gestem „wstecz” na telefonie.</p>
+    </div>
+    <div style="position:relative">
+      <div class="phone">
+        <div class="top"><span class="logo"><i></i></span> Eko-Energia</div>
+        <div class="body">
+          <div class="row">Lutownica Hakko FX-888<small>I-EL-0007 · Szafa A / półka 2</small></div>
+          <div class="row">Multimetr UNI-T<small>I-EL-0012 · Szafa A / półka 1</small></div>
+          <div class="row">Opaski zaciskowe 200 mm<small>C-MC-0003 · 140 szt.</small></div>
+          <div class="row">Taśma izolacyjna<small>C-EL-0009 · 6 szt.</small></div>
+        </div>
+        <div class="nav">
+          <div>
+            <div class="ico"></div>Start
+          </div>
+          <div class="on">
+            <div class="ico"></div>Magazyn
+          </div>
+          <div><div class="fab"><div class="scanframe"><i></i></div></div></div>
+          <div>
+            <div class="ico"></div>Wyjazdy
+          </div>
+          <div>
+            <div class="ico"></div>Zakupy
+          </div>
+        </div>
+      </div>
+      <div class="callout" style="left:calc(50% + 40px);bottom:96px">Skaner</div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-n="5">
+  <div class="kicker">Magazyn</div>
+  <h2>Sprzęt czy materiał?</h2>
+  <div class="grid2" style="flex:1">
+    <div class="card">
+      <h3>Sprzęt <span class="pill" style="margin-left:8px">I-XX-0001</span></h3>
+      <p>Rzeczy trwałe, liczone na sztuki: narzędzia, elektronika, części zapasowe.</p>
+      <p style="margin-top:12px">Każda sztuka ma <b>własną naklejkę</b>, miejsce, opiekuna i status:</p>
+      <p style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <span class="pill">W warsztacie</span><span class="pill blue">Na wyjeździe</span><span class="pill amber">Uszkodzone</span><span class="pill red">Zaginione</span>
+      </p>
+    </div>
+    <div class="card">
+      <h3>Materiał <span class="pill" style="margin-left:8px">C-XX-0001</span></h3>
+      <p>Rzeczy zużywalne: śrubki, opaski, taśmy, kable na metry.</p>
+      <p style="margin-top:12px">Liczy się <b>stan</b>, który zmieniasz przyciskami:</p>
+      <p style="margin-top:14px"><span class="stepper"><span>−</span><b>24</b><span>+</span></span> <span class="muted" style="font-size:17px;margin-left:10px">min. 10</span></p>
+      <p style="margin-top:12px">Spadnie poniżej <b>minimum</b>? Trafia sam na listę zakupów.</p>
+    </div>
+  </div>
+  <div class="tip"><b>SKU nadaje system</b> (prefiks z kodu kategorii). Nie wymyślaj numerów, wpisz tylko nazwę i kategorię.</div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-n="6">
+  <div class="kicker">Etykiety z rolki</div>
+  <h2>Nowa rzecz = naklejka z rolki</h2>
+  <p style="margin-bottom:28px;max-width:1000px">Nie drukujemy etykiet. Bierzesz kolejną naklejkę z rolki, przyklejasz i przypisujesz w aplikacji. Każdy kod istnieje tylko raz.</p>
+  <div class="flow">
+    <div class="step" style="flex:.8;display:flex;align-items:center;justify-content:center"><div class="label-chip"><div class="bars"></div>00045</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><h3>1. Przyklej i zeskanuj</h3><p>Niebieski przycisk skanera, celujesz w naklejkę.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><h3>2. „Nowa etykieta”</h3><p>Aplikacja wie, że kod jest wolny. Wybierz: <b>nowy sprzęt</b>, <b>nowy materiał</b> albo <b>przypisz do istniejącego</b>.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><h3>3. Uzupełnij formularz</h3><p>Nazwa, kategoria, miejsce, opiekun. Kod etykiety jest już wpisany.</p></div>
+  </div>
+  <div class="tip">Naklejka zniszczona? Przyklej nową i w szczegółach rzeczy zmień etykietę. <b>Zajęty kod</b> aplikacja pozwoli przenieść jednym kliknięciem.</div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-n="7">
+  <div class="kicker">Skaner</div>
+  <h2>Co się dzieje po zeskanowaniu</h2>
+  <div class="cols wide-left">
+    <div class="grid2">
+      <div class="card"><h3>Sprzęt</h3><p>Otwierają się szczegóły: gdzie leży, kto się opiekuje, historia zmian.</p></div>
+      <div class="card"><h3>Materiał</h3><p>Szczegóły ze stanem. Od razu możesz zrobić − / +.</p></div>
+      <div class="card"><h3>Rzecz na wyjeździe</h3><p>Przenosi do wyjazdu, w którym jest spakowana.</p></div>
+      <div class="card"><h3>Nieznany kod</h3><p>Propozycja przypisania naklejki (poprzedni slajd).</p></div>
+    </div>
+    <div>
+      <ul class="clean">
+        <li>Działa kod kreskowy z naklejki, <b>QR</b> i wpisane ręcznie <b>SKU</b>.</li>
+        <li>W ciemnym magazynie włącz <b>latarkę</b> w oknie skanera.</li>
+        <li>Aparat nie działa? Wpisz numer ręcznie w tym samym oknie.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-n="8">
+  <div class="kicker">Dodawanie i edycja</div>
+  <h2>Formularz, który sam podpowiada</h2>
+  <div class="cols">
+    <ul class="clean">
+      <li><b>+ Sprzęt</b> / <b>+ Materiał</b> w Magazynie albo przez skan nowej naklejki.</li>
+      <li>Pola <b>Kategoria, Miejsce, Opiekun</b> mają wyszukiwarkę: zacznij pisać, lista się zawęzi.</li>
+      <li><b>Notatki</b>: numer seryjny, stan, uwagi.</li>
+      <li><b>Link do sklepu</b> przyda się przy zakupie kolejnej sztuki.</li>
+      <li>Każda zmiana zapisuje się w <b>historii</b>: kto, kiedy, co.</li>
+    </ul>
+    <div class="card">
+      <p class="muted" style="font-size:14px;margin-bottom:6px">Miejsce w magazynie</p>
+      <div class="field" style="color:var(--text);border-color:var(--blue)">sza|</div>
+      <div style="background:#18181b;border:1px solid var(--line);border-radius:12px;padding:6px">
+        <div style="padding:9px 12px;border-radius:9px;background:#27272a;font-size:16px">Szafa A / półka 1<div class="muted" style="font-size:13px">B4 · Jan Kowalski</div></div>
+        <div style="padding:9px 12px;font-size:16px;color:#d4d4d8">Szafa A / półka 2<div class="muted" style="font-size:13px">B4</div></div>
+        <div style="padding:9px 12px;font-size:16px;color:#d4d4d8">Szafa B<div class="muted" style="font-size:13px">112</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-n="9">
+  <div class="kicker">Porządek</div>
+  <h2>Miejsca i kategorie</h2>
+  <div class="grid2" style="flex:1">
+    <div class="card">
+      <h3>Magazyn → Miejsca</h3>
+      <p>Szafy, regały, półki (z salą i opiekunem). Kliknięcie miejsca pokazuje wszystko, co tam leży.</p>
+      <p style="margin-top:12px">Nazywaj tak, jak jest podpisane w warsztacie, np. <b>„Szafa A / półka 2”</b>.</p>
+    </div>
+    <div class="card">
+      <h3>Magazyn → Kategorie</h3>
+      <p>Kod kategorii (2–4 znaki) tworzy prefiks SKU, np. <span class="mono">EL → I-EL-0001</span>.</p>
+      <p style="margin-top:12px">„Bez kategorii” (BK) jest domyślna i nie da się jej usunąć.</p>
+    </div>
+  </div>
+  <div class="tip">Filtr <b>„Pod moją opieką”</b> w Magazynie pokazuje tylko to, za co odpowiadasz.</div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-n="10">
+  <div class="kicker">Wyjazdy</div>
+  <h2>Od planu do rozliczenia</h2>
+  <div class="flow" style="margin-bottom:28px">
+    <div class="step"><span class="pill">Planowanie</span><h3 style="margin-top:12px">Utwórz wyjazd</h3><p>Nazwa, daty, miejsce. Dodaj skrzynie.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="pill blue">Pakowanie</span><h3 style="margin-top:12px">Skanuj do skrzyni</h3><p>Sprzęt i materiały trafiają do wybranej skrzyni.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="pill green">W trasie</span><h3 style="margin-top:12px">„Wyruszamy”</h3><p>Wyjazd staje się aktywny.</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><span class="pill amber">Powrót</span><h3 style="margin-top:12px">Rozlicz i zamknij</h3><p>Co wróciło, co zginęło, ile zużyto.</p></div>
+  </div>
+  <div class="card">
+    <h3>Skrzynia = fizyczne pudło</h3>
+    <p>Ma <b>nazwę</b> (najlepiej tę z pudła), <b>opiekuna</b>, który ją pakuje i pilnuje, oraz <b>miejsce, gdzie stoi</b> (np. regał przy wejściu, bus). Edytujesz ołówkiem w nagłówku skrzyni.</p>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-n="11">
+  <div class="kicker">Pakowanie</div>
+  <h2>Skanuj seriami, bez zamykania aparatu</h2>
+  <div class="cols wide-left">
+    <ol class="steps">
+      <li>Wybierz skrzynię i kliknij <b>„Skanuj do: Skrzynia 1”</b>.</li>
+      <li><b>Sprzęt</b> po zeskanowaniu jest od razu spakowany. <b>Materiał</b>: +1 szt. na każdy skan.</li>
+      <li>Na dole okna skanera zmienisz skrzynię docelową w locie.</li>
+      <li>Bez skanera: <b>„+ Dodaj”</b> w skrzyni i zaznacz wiele rzeczy naraz. Kółko przy rzeczy = spakowane.</li>
+    </ol>
+    <div class="card">
+      <p style="font-size:17px;display:flex;justify-content:space-between;margin-bottom:10px"><span>Spakowano 17/25 sprzętu · 4/6 materiałów</span><b>68%</b></p>
+      <div class="progress"><i></i></div>
+      <div style="margin-top:22px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);color:#a7f3d0;border-radius:12px;padding:12px 14px;font-size:16px">✓ Multimetr UNI-T → Skrzynia 1</div>
+      <div style="margin-top:10px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);color:#bfdbfe;border-radius:12px;padding:12px 14px;font-size:16px">+1 Opaski zaciskowe (3/5)</div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-n="12">
+  <div class="kicker">Po powrocie</div>
+  <h2>Rozliczenie wyjazdu</h2>
+  <div class="cols">
+    <ul class="clean">
+      <li>Zakładka <b>„Powrót i rozliczenie”</b> w wyjeździe.</li>
+      <li>Przy każdym sprzęcie: <b>wróciło</b> (wraca na swoje miejsce), <b>zaginęło</b> albo <b>uszkodzone</b>.</li>
+      <li>Przy materiałach wpisz, <b>ile sztuk wróciło</b>. Reszta liczy się jako zużyta, a wracające sztuki dodają się do stanu.</li>
+      <li>Na koniec <b>„Zwróć i zamknij”</b>: wszystko nierozliczone wraca do magazynu, wyjazd zostaje w historii.</li>
+    </ul>
+    <div class="card">
+      <h3>Dlaczego to ważne</h3>
+      <p>Bez rozliczenia sprzęt dalej „jest na wyjeździe” i nikt go nie znajdzie w magazynie. Zaginione i uszkodzone rzeczy widać potem na Starcie, więc łatwo je naprawić albo odkupić.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-n="13">
+  <div class="kicker">Zakupy</div>
+  <h2>Lista, która pisze się sama</h2>
+  <div class="grid3" style="flex:1">
+    <div class="card"><span class="pill amber">Do zamówienia</span><h3 style="margin-top:14px">Zgłoszenia</h3><p>Materiał poniżej minimum pojawia się sam. Coś innego? <b>„Zgłoś zakup”</b> z ilością, ceną i linkiem.</p></div>
+    <div class="card"><span class="pill blue">W drodze</span><h3 style="margin-top:14px">Zamówione</h3><p>Ktoś zamówił? Oznacz, żeby nikt nie kupił drugi raz.</p></div>
+    <div class="card"><span class="pill green">Przyjęte</span><h3 style="margin-top:14px">„Przyjmij dostawę”</h3><p>Wybierz, gdzie odłożyć. Stan materiału rośnie albo powstaje nowa pozycja w magazynie.</p></div>
+  </div>
+  <div class="tip">Uzupełnisz stan ręcznie powyżej minimum? Automatyczne zgłoszenie <b>samo się anuluje</b>.</div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-n="14">
+  <div class="kicker">Konto</div>
+  <h2>Zapomniane hasło? Kod koła</h2>
+  <div class="cols wide-left">
+    <div>
+      <ol class="steps">
+        <li>Na ekranie logowania: <b>„Nie pamiętasz hasła? Ustaw nowe kodem koła”</b>.</li>
+        <li>Poproś dowolnego członka o <b>aktualny kod</b> (Ustawienia → Kod koła).</li>
+        <li>Wpisz email, kod i nowe hasło. Od razu jesteś zalogowany.</li>
+      </ol>
+      <p class="muted" style="margin-top:22px;font-size:18px">Aplikacja nie wysyła maili. Hasło zmienisz też w Ustawieniach → „Ustaw / zmień hasło”, także jeśli logujesz się przez Google.</p>
+    </div>
+    <div class="card">
+      <div class="field">jan.kowalski@student.agh.edu.pl</div>
+      <div class="field code">3FA9C1</div>
+      <div class="field">••••••••</div>
+      <div class="btn">Ustaw hasło i zaloguj</div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-n="15">
+  <div class="kicker">Role</div>
+  <h2>Kto co może</h2>
+  <div class="grid3" style="margin-bottom:28px">
+    <div class="card"><span class="pill amber">Brak dostępu</span><p style="margin-top:12px">Ma konto, ale nie wpisał kodu albo odebrano mu dostęp. Nie widzi magazynu.</p></div>
+    <div class="card"><span class="pill">Członek</span><p style="margin-top:12px">Wszystko w magazynie, wyjazdach i zakupach. Widzi kod koła.</p></div>
+    <div class="card"><span class="pill blue">Admin</span><p style="margin-top:12px">Dodatkowo zarządza członkami, unieważnia kod, usuwa wyjazdy i kategorie.</p></div>
+  </div>
+  <div class="card">
+    <h3>Dla adminów: Ustawienia → Członkowie</h3>
+    <p style="margin-bottom:16px">Rolę zmieniasz jednym kliknięciem, kosz usuwa konto na stałe (historia zostaje). Kod koła wyciekł? <b>„Unieważnij kod”</b>. Hasła admina nie da się zresetować kodem, więc zaloguj się przez Google.</p>
+    <span class="seg"><span>Brak dostępu</span><span class="m">Członek</span><span>Admin</span></span>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-n="16">
+  <div class="kicker">Dobre nawyki</div>
+  <h2>Pięć zasad, żeby magazyn się zgadzał</h2>
+  <ol class="steps" style="max-width:1050px">
+    <li><b>Bierzesz coś z warsztatu na dłużej?</b> Zmień miejsce albo opiekuna. Trwa to 10 sekund ze skanerem.</li>
+    <li><b>Zużyłeś materiał?</b> Kliknij −. Lista zakupów zrobi się sama.</li>
+    <li><b>Pakujesz na wyjazd tylko skanerem</b> albo przez „+ Dodaj”. Nie wynoś rzeczy „na słowo”.</li>
+    <li><b>Po powrocie rozlicz wyjazd</b> w ciągu kilku dni, póki pamiętasz, co się stało.</li>
+    <li><b>Każda nowa rzecz dostaje naklejkę z rolki</b> od razu przy wprowadzaniu.</li>
+  </ol>
+  <div class="tip">Coś nie działa albo masz pomysł? Pisz do adminów koła. Ich nazwiska widać na ekranie logowania i w Ustawieniach.</div>
+</section>
+
+</body>
+</html>
