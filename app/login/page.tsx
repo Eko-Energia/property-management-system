@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Boxes, Mail } from 'lucide-react';
+import { ArrowLeft, Boxes, KeyRound, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabase } from '@/lib/supabase/client';
 import { errorMessage } from '@/lib/errors';
+import { AdminsHint } from '@/components/admins-hint';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/field';
 import { Tabs } from '@/components/ui/misc';
@@ -25,12 +26,13 @@ const AUTH_ERRORS: Record<string, string> = {
 function LoginForm() {
   const params = useSearchParams();
   const next = safeNext(params.get('next'));
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
+  const [code, setCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<null | 'password' | 'google' | 'reset'>(null);
-  const [sent, setSent] = useState<{ to: string; kind: 'confirm' | 'reset' } | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
 
   // Google redirects away; coming back with the browser's Back button restores this
   // page from the back/forward cache with the spinner still on -> reset it.
@@ -60,7 +62,7 @@ function LoginForm() {
         });
         if (error) throw error;
         if (data.session) window.location.assign(next);
-        else setSent({ to: email, kind: 'confirm' });
+        else setSent(email);
       }
     } catch (err) {
       fail(err);
@@ -78,18 +80,22 @@ function LoginForm() {
     }
   };
 
-  const forgotPassword = async () => {
-    if (!email) {
-      toast.info('Wpisz adres email, wyślemy link do ustawienia nowego hasła.');
-      return;
-    }
+  // No emails: the rotating club code proves you are in the club.
+  const resetWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
     setBusy('reset');
-    const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/nowe-haslo')}`,
-    });
-    setBusy(null);
-    if (error) fail(error);
-    else setSent({ to: email, kind: 'reset' });
+    const supabase = getSupabase();
+    try {
+      const { error } = await supabase.rpc('reset_password_with_code', { p_email: email.trim(), p_code: code.trim(), p_password: password });
+      if (error) throw error;
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (loginError) throw loginError;
+      toast.success('Nowe hasło ustawione');
+      window.location.assign(next);
+    } catch (err) {
+      fail(err);
+      setBusy(null);
+    }
   };
 
   if (sent) {
@@ -100,13 +106,53 @@ function LoginForm() {
         </div>
         <p className="font-medium text-zinc-100">Sprawdź skrzynkę</p>
         <p className="text-sm text-zinc-400">
-          Wysłaliśmy link na <span className="text-zinc-200">{sent.to}</span>.{' '}
-          {sent.kind === 'reset' ? 'Kliknij go, a ustawisz nowe hasło.' : 'Kliknij go, żeby potwierdzić konto.'} Sprawdź też spam.
+          Wysłaliśmy link na <span className="text-zinc-200">{sent}</span>. Kliknij go, żeby potwierdzić konto. Sprawdź też spam.
         </p>
         <Button variant="ghost" size="sm" onClick={() => setSent(null)}>
           Wróć
         </Button>
       </div>
+    );
+  }
+
+  if (mode === 'reset') {
+    return (
+      <form onSubmit={resetWithCode} className="space-y-3">
+        <button type="button" onClick={() => setMode('login')} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300">
+          <ArrowLeft className="h-4 w-4" /> Logowanie
+        </button>
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-blue-400" />
+          <h2 className="font-semibold text-zinc-100">Nowe hasło kodem koła</h2>
+        </div>
+        <p className="text-sm text-zinc-400">
+          Poproś dowolnego członka o aktualny kod koła (Ustawienia → Kod koła, zmienia się co 15 min). <AdminsHint />
+        </p>
+        <Field label="Email konta" required>
+          {(id) => <Input id={id} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />}
+        </Field>
+        <Field label="Kod koła" required>
+          {(id) => (
+            <Input
+              id={id}
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              required
+              minLength={4}
+              autoComplete="off"
+              autoCapitalize="characters"
+              placeholder="3FA9C1"
+              className="text-center font-mono tracking-[0.3em]"
+            />
+          )}
+        </Field>
+        <Field label="Nowe hasło" required hint="Min. 6 znaków. Po zapisaniu od razu Cię zalogujemy.">
+          {(id) => <Input id={id} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />}
+        </Field>
+        <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy === 'reset'}>
+          Ustaw hasło i zaloguj
+        </Button>
+      </form>
     );
   }
 
@@ -158,8 +204,8 @@ function LoginForm() {
       </form>
 
       {mode === 'login' && (
-        <button onClick={forgotPassword} disabled={busy !== null} className="w-full text-center text-sm text-zinc-400 hover:text-zinc-200">
-          {busy === 'reset' ? 'Wysyłanie…' : <>Nie pamiętasz hasła? <span className="text-blue-400">Ustaw nowe</span></>}
+        <button onClick={() => setMode('reset')} disabled={busy !== null} className="w-full text-center text-sm text-zinc-400 hover:text-zinc-200">
+          Nie pamiętasz hasła? <span className="text-blue-400">Ustaw nowe kodem koła</span>
         </button>
       )}
     </div>

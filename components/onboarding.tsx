@@ -74,7 +74,10 @@ const WELCOME: Tour = {
           <p>
             Filtr <b>„Pod moją opieką”</b> w Magazynie pokazuje to, za co odpowiadasz.
           </p>
-          <p>W Ustawieniach zmienisz imię i hasło, a ten samouczek otworzysz jeszcze raz.</p>
+          <p>
+            W Ustawieniach zmienisz imię i hasło, zobaczysz <b>kod koła</b> (zmienia się co 15 min) i otworzysz ten samouczek jeszcze raz.
+          </p>
+          <p>Ktoś zapomniał hasła? Podaj mu kod koła, a ustawi nowe na ekranie logowania („Nie pamiętasz hasła?”).</p>
         </>
       ),
     },
@@ -96,7 +99,7 @@ const ADMIN: Tour = {
             <li className="flex gap-2">
               <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
               <span>
-                <b>Kod koła</b>: link zaproszenia dla nowych osób; gdy wycieknie, wygenerujesz nowy.
+                <b>Kod koła</b>: zmienia się sam co 15 min; gdy wycieknie, unieważnisz go od razu. Haseł adminów nie da się resetować kodem.
               </span>
             </li>
             <li className="flex gap-2">

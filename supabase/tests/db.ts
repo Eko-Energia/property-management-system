@@ -39,6 +39,6 @@ export async function asUser<T>(db: PGlite, uid: string | null, fn: (tx: Transac
 }
 
 export async function joinCode(db: PGlite): Promise<string> {
-  const res = await db.query<{ join_code: string }>(`select join_code from public.app_settings`);
-  return res.rows[0].join_code;
+  const res = await db.query<{ code: string }>(`select public.join_code_for(public.join_window()) as code`);
+  return res.rows[0].code;
 }

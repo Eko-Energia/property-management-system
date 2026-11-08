@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Copy, GraduationCap, KeyRound, Loader2, Lock, RefreshCw, Shield, Trash2, User, UserX, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -49,7 +49,7 @@ export default function SettingsPage() {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <ProfileSection />
-          {isAdmin && <JoinCodeSection />}
+          <JoinCodeSection />
           <Link href="/magazyn?tab=miejsca" className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400 hover:text-zinc-200">
             <span className="flex-1">
               Miejsca w magazynie i kategorie są teraz w zakładkach <span className="text-zinc-200">Magazynu</span>.
@@ -103,10 +103,12 @@ function ProfileSection() {
 }
 
 function JoinCodeSection() {
+  const { isAdmin } = useAuth();
   const code = useJoinCode(true);
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const link = typeof window !== 'undefined' && code.data ? `${window.location.origin}/dolacz?kod=${code.data.join_code}` : '';
+  const left = useCountdown(code.data?.expiresAt ?? null);
+  const link = typeof window !== 'undefined' && code.data ? `${window.location.origin}/dolacz?kod=${code.data.code}` : '';
 
   const copy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -115,34 +117,59 @@ function JoinCodeSection() {
 
   const regenerate = async () => {
     setBusy(true);
-    const next = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
-    const { error } = await getSupabase().from('app_settings').update({ join_code: next }).eq('id', true);
-    setBusy(false);
-    if (error) toast.error(errorMessage(error));
-    else {
-      toast.success('Nowy kod aktywny, stary przestał działać');
-      qc.invalidateQueries({ queryKey: qk.settings });
+    try {
+      await rpc('regenerate_join_code', {});
+      toast.success('Nowy kod aktywny, poprzednie przestały działać');
+      await qc.invalidateQueries({ queryKey: qk.settings });
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Section icon={KeyRound} title="Kod koła" description="Nowe osoby po założeniu konta wpisują ten kod i dostają dostęp. Wyślij link na grupę.">
+    <Section
+      icon={KeyRound}
+      title="Kod koła"
+      description="Zmienia się co 15 minut. Podaj go osobie, która zakłada konto albo zapomniała hasła (reset hasła: „Nie pamiętasz hasła?” na ekranie logowania)."
+    >
       <div className="flex items-center gap-2">
-        <Mono className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-center text-lg tracking-[0.3em] text-zinc-100">{code.data?.join_code ?? '······'}</Mono>
-        <Button size="icon" onClick={() => code.data && copy(code.data.join_code)} aria-label="Kopiuj kod">
+        <Mono className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-center text-lg tracking-[0.3em] text-zinc-100">{code.data?.code ?? '······'}</Mono>
+        <Button size="icon" onClick={() => code.data && copy(code.data.code)} aria-label="Kopiuj kod">
           <Copy className="h-4 w-4" />
         </Button>
       </div>
+      {left && (
+        <p className="mt-2 text-xs text-zinc-500">
+          Zmieni się za <span className="tabular-nums text-zinc-300">{left}</span>. Poprzedni kod działa jeszcze 15 minut.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="primary" onClick={() => copy(link)} disabled={!link}>
           <Copy className="h-4 w-4" /> Kopiuj link zaproszenia
         </Button>
-        <Button size="sm" variant="ghost" onClick={regenerate} loading={busy}>
-          <RefreshCw className="h-4 w-4" /> Wygeneruj nowy
-        </Button>
+        {isAdmin && (
+          <Button size="sm" variant="ghost" onClick={regenerate} loading={busy}>
+            <RefreshCw className="h-4 w-4" /> Unieważnij kod
+          </Button>
+        )}
       </div>
     </Section>
   );
+}
+
+/** mm:ss until `target`, ticking every second. */
+function useCountdown(target: number | null): string | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!target) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(t);
+  }, [target]);
+  if (!target) return null;
+  const s = Math.max(0, Math.round((target - now) / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [

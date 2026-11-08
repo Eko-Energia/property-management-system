@@ -87,9 +87,9 @@ export type Database = {
         Relationships: [];
       };
       app_settings: {
-        Row: { id: boolean; join_code: string };
-        Insert: { id?: boolean; join_code: string };
-        Update: { join_code?: string };
+        Row: { id: boolean; join_secret: string };
+        Insert: { id?: boolean; join_secret?: string };
+        Update: { join_secret?: string };
         Relationships: [];
       };
       categories: {
@@ -203,6 +203,10 @@ export type Database = {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       join_club: { Args: { p_code: string }; Returns: Database['public']['Enums']['user_role'] };
       remove_member: { Args: { p_user_id: string }; Returns: undefined };
+      current_join_code: { Args: Record<string, never>; Returns: { code: string; expires_at: string }[] };
+      regenerate_join_code: { Args: Record<string, never>; Returns: undefined };
+      reset_password_with_code: { Args: { p_email: string; p_code: string; p_password: string }; Returns: undefined };
+      club_admins: { Args: Record<string, never>; Returns: string[] };
       ensure_profile: { Args: Record<string, never>; Returns: Database['public']['Tables']['profiles']['Row'] };
       next_sku: { Args: { p_kind: string; p_category_id: number | null }; Returns: string };
       lookup_code: {

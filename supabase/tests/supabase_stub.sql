@@ -11,8 +11,16 @@ create table auth.users (
   id                 uuid primary key default gen_random_uuid(),
   email              text,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
-  created_at         timestamptz not null default clock_timestamp()
+  created_at         timestamptz not null default clock_timestamp(),
+  updated_at         timestamptz,
+  encrypted_password text
 );
+
+-- pgcrypto lives in the "extensions" schema on Supabase; PGlite has no pgcrypto,
+-- so a deterministic fake is enough to test who may change a password
+create schema extensions;
+create function extensions.gen_salt(text) returns text language sql immutable as $$ select '$fake$' $$;
+create function extensions.crypt(text, text) returns text language sql immutable as $$ select $2 || md5($1) $$;
 
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid

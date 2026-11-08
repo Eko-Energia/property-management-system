@@ -14,7 +14,7 @@ const ERRORS: Record<string, string> = {
   'Password should be at least 6 characters.': 'Hasło musi mieć co najmniej 6 znaków.',
 };
 
-/** Reached from the "forgot password" email (session already set by /auth/callback) or from settings. */
+/** Change or set (e.g. Google-only accounts) the password of the signed-in user; linked from settings. */
 export default function NewPasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState('');
