@@ -159,7 +159,6 @@ export function InventoryForm({
       onClose={onClose}
       title={title}
       description={record ? <Mono>{record.sku}</Mono> : kind === 'item' ? 'Sprzęt trwały: każdy egzemplarz to osobny rekord.' : 'Materiał liczony w sztukach (śruby, cyna, taśma…).'}
-      dismissible={false}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

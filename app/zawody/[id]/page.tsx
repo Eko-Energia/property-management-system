@@ -8,13 +8,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { useEventConsumables, useEvents, useItems, useLocations } from '@/lib/data/queries';
 import { eventProgress } from '@/lib/data/event-progress';
-import { INVENTORY_KEYS, rpc, useAction, useInsert, useUpdate } from '@/lib/data/mutations';
+import { INVENTORY_KEYS, rpc, useAction, useUpdate } from '@/lib/data/mutations';
 import { qk } from '@/lib/data/keys';
 import { errorMessage } from '@/lib/errors';
 import { EVENT_STATUS, formatDate } from '@/lib/format';
 import type { Item } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Input, Select } from '@/components/ui/field';
+import { Select } from '@/components/ui/field';
 import { Badge, Card, EmptyState, ErrorState, ListSkeleton, Tabs } from '@/components/ui/misc';
 import { useConfirm } from '@/components/ui/confirm';
 import { cn } from '@/components/ui/cn';
@@ -23,6 +23,7 @@ import { ItemDetail } from '@/components/inventory/details';
 import { ActivityList } from '@/components/inventory/activity';
 import { EventForm } from '@/components/events/event-form';
 import { BoxPanel } from '@/components/events/box-panel';
+import { BoxForm } from '@/components/events/box-form';
 import { Settlement } from '@/components/events/settlement';
 
 type Tab = 'pakowanie' | 'rozliczenie' | 'historia';
@@ -42,7 +43,7 @@ function EventView({ eventId }: { eventId: number }) {
   const boxes = (locations.data ?? []).filter((l) => l.kind === 'event_box' && l.event_id === eventId);
   const [tab, setTab] = useState<Tab>('pakowanie');
   const [boxId, setBoxId] = useState<number | null>(null);
-  const [newBox, setNewBox] = useState<string | null>(null);
+  const [creatingBox, setCreatingBox] = useState(false);
   const [editing, setEditing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<ScanFeedback>(null);
@@ -64,7 +65,6 @@ function EventView({ eventId }: { eventId: number }) {
     if (deepItem) window.history.replaceState(null, '', `/zawody/${eventId}`);
   }, [deepItem, eventId]);
 
-  const createBox = useInsert('locations', { invalidate: [qk.locations] });
   const updateEvent = useUpdate('events', { invalidate: [qk.events, qk.stats] });
   const deleteEvent = useAction({
     fn: () => rpc('delete_event', { p_event_id: eventId }),
@@ -83,15 +83,6 @@ function EventView({ eventId }: { eventId: number }) {
   }
 
   const status = EVENT_STATUS[event.status];
-
-  const submitBox = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = newBox?.trim();
-    if (!name) return;
-    const created = await createBox.mutateAsync({ name, kind: 'event_box', event_id: eventId });
-    setBoxId(created.id);
-    setNewBox(null);
-  };
 
   const onScan = async (code: string) => {
     const box = selectedBox;
@@ -220,26 +211,15 @@ function EventView({ eventId }: { eventId: number }) {
                 {b.name}
               </button>
             ))}
-            {!readOnly &&
-              (newBox !== null ? (
-                <form onSubmit={submitBox} className="flex gap-2">
-                  <Input autoFocus value={newBox} onChange={(e) => setNewBox(e.target.value)} placeholder="Nazwa skrzyni" className="h-9 w-44" maxLength={80} />
-                  <Button type="submit" size="sm" variant="primary" loading={createBox.isPending}>
-                    Dodaj
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setNewBox(null)}>
-                    Anuluj
-                  </Button>
-                </form>
-              ) : (
-                <Button size="sm" variant="ghost" onClick={() => setNewBox(`Skrzynia ${boxes.length + 1}`)}>
-                  <Plus className="h-4 w-4" /> Skrzynia
-                </Button>
-              ))}
+            {!readOnly && (
+              <Button size="sm" variant="ghost" onClick={() => setCreatingBox(true)}>
+                <Plus className="h-4 w-4" /> Skrzynia
+              </Button>
+            )}
           </div>
 
           {boxes.length === 0 ? (
-            <EmptyState icon={Package} title="Brak skrzyń" action={!readOnly && <Button variant="primary" onClick={() => setNewBox('Skrzynia 1')}><Plus className="h-4 w-4" /> Dodaj skrzynię</Button>}>
+            <EmptyState icon={Package} title="Brak skrzyń" action={!readOnly && <Button variant="primary" onClick={() => setCreatingBox(true)}><Plus className="h-4 w-4" /> Dodaj skrzynię</Button>}>
               Skrzynia to fizyczne pudło, do którego pakujecie sprzęt i materiały.
             </EmptyState>
           ) : (
@@ -285,6 +265,7 @@ function EventView({ eventId }: { eventId: number }) {
       />
       <ItemDetail item={openItem} onClose={() => setOpenItemId(null)} />
       <EventForm open={editing} onClose={() => setEditing(false)} record={event} />
+      <BoxForm open={creatingBox} onClose={() => setCreatingBox(false)} eventId={eventId} box={null} defaultName={`Skrzynia ${boxes.length + 1}`} onSaved={(b) => setBoxId(b.id)} />
     </>
   );
 }

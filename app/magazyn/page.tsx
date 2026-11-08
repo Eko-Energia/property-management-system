@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { AlertTriangle, Barcode, Boxes, Link2, MapPin, PackagePlus, Plus, Search, User, Wrench, X } from 'lucide-react';
+import { AlertTriangle, Barcode, Boxes, Link2, MapPin, PackagePlus, Plus, Search, Tags, User, Wrench, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConsumables, useItems } from '@/lib/data/queries';
 import { useLookups } from '@/lib/data/lookups';
@@ -16,8 +16,12 @@ import { Badge, EmptyState, ErrorState, ListSkeleton, Mono, PageHeader, Stepper,
 import { cn } from '@/components/ui/cn';
 import { InventoryForm } from '@/components/inventory/item-form';
 import { ConsumableDetail, ItemDetail } from '@/components/inventory/details';
+import { CategoriesManager, LocationsManager } from '@/components/inventory/dictionaries';
+import { CategorySelect, LocationSelect } from '@/components/inventory/pickers';
 
-type Tab = 'sprzet' | 'materialy';
+type Tab = 'sprzet' | 'materialy' | 'miejsca' | 'kategorie';
+const TABS: Tab[] = ['sprzet', 'materialy', 'miejsca', 'kategorie'];
+const parseTab = (v: string | null): Tab => (TABS.includes(v as Tab) ? (v as Tab) : 'sprzet');
 type SortKey = 'name' | 'sku' | 'location' | 'stock';
 
 type UiState = { tab: Tab; open: number | null; new: 'item' | 'consumable' | null; label: string | null };
@@ -31,7 +35,7 @@ function useWarehouseState() {
   const params = useSearchParams();
   const pathname = usePathname();
   const [state, setState] = useState<UiState>(() => ({
-    tab: params.get('tab') === 'materialy' ? 'materialy' : 'sprzet',
+    tab: parseTab(params.get('tab')),
     open: null,
     new: null,
     label: null,
@@ -44,7 +48,7 @@ function useWarehouseState() {
     const created = params.get('new');
     setAdopted(deepLink);
     setState({
-      tab: params.get('tab') === 'materialy' ? 'materialy' : 'sprzet',
+      tab: parseTab(params.get('tab')),
       open: params.get('open') ? Number(params.get('open')) : null,
       new: created === 'item' || created === 'consumable' ? created : null,
       label: params.get('label') || null,
@@ -54,7 +58,7 @@ function useWarehouseState() {
 
   // keep only ?tab in the address bar
   useEffect(() => {
-    const target = state.tab === 'materialy' ? `${pathname}?tab=materialy` : pathname;
+    const target = state.tab === 'sprzet' ? pathname : `${pathname}?tab=${state.tab}`;
     if (window.location.pathname + window.location.search !== target) window.history.replaceState(null, '', target);
   }, [deepLink, state.tab, pathname]);
 
@@ -72,8 +76,8 @@ function Warehouse() {
   const { tab, open: openId, new: newKind, label: pendingLabel } = ui;
 
   const [query, setQuery] = useState('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [locationId, setLocationId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [locationId, setLocationId] = useState<number | null>(null);
   const [status, setStatus] = useState<'' | ItemStatus | 'out'>('');
   const [onlyMine, setOnlyMine] = useState(false);
   const [onlyLow, setOnlyLow] = useState(false);
@@ -87,8 +91,8 @@ function Warehouse() {
 
   const filteredItems = useMemo(() => {
     const rows = (items.data ?? []).filter((i) => {
-      if (categoryId && String(i.category_id) !== categoryId) return false;
-      if (locationId && String(i.location_id) !== locationId) return false;
+      if (categoryId && i.category_id !== categoryId) return false;
+      if (locationId && i.location_id !== locationId) return false;
       if (status === 'out' && !['assigned_to_event', 'packed'].includes(i.status)) return false;
       if (status && status !== 'out' && i.status !== status) return false;
       if (onlyMine && i.responsible_id !== user?.id) return false;
@@ -102,8 +106,8 @@ function Warehouse() {
 
   const filteredConsumables = useMemo(() => {
     const rows = (consumables.data ?? []).filter((c) => {
-      if (categoryId && String(c.category_id) !== categoryId) return false;
-      if (locationId && String(c.location_id) !== locationId) return false;
+      if (categoryId && c.category_id !== categoryId) return false;
+      if (locationId && c.location_id !== locationId) return false;
       if (onlyLow && !(c.min_quantity > 0 && c.quantity_stored < c.min_quantity)) return false;
       if (onlyMine && c.responsible_id !== user?.id) return false;
       return matchesQuery(query, c.name, c.sku, c.barcode, c.notes, lookups.locationLabel(c.location_id));
@@ -123,7 +127,24 @@ function Warehouse() {
   const openItem = tab === 'sprzet' && openId ? (items.data?.find((i) => i.id === openId) ?? null) : null;
   const openConsumable = tab === 'materialy' && openId ? (consumables.data?.find((c) => c.id === openId) ?? null) : null;
   const filtersActive = Boolean(query || categoryId || locationId || status || onlyMine || onlyLow);
-  const active = tab === 'sprzet' ? items : consumables;
+  const active = tab === 'materialy' ? consumables : items;
+  const dictionary = tab === 'miejsca' || tab === 'kategorie';
+
+  const clearFilters = () => {
+    setQuery('');
+    setCategoryId(null);
+    setLocationId(null);
+    setStatus('');
+    setOnlyMine(false);
+    setOnlyLow(false);
+  };
+  /** from the places/categories tabs: show what is there */
+  const showFiltered = (patch: { locationId?: number; categoryId?: number }) => {
+    clearFilters();
+    if (patch.locationId) setLocationId(patch.locationId);
+    if (patch.categoryId) setCategoryId(patch.categoryId);
+    set({ tab: 'sprzet', open: null });
+  };
 
   const onRowClick = (kind: 'item' | 'consumable', id: number) => {
     if (pendingLabel) {
@@ -164,35 +185,25 @@ function Warehouse() {
 
       <div className="mb-4 flex flex-col gap-3">
         <Tabs
+          className="max-w-full self-start overflow-x-auto"
           value={tab}
           onChange={(v) => set({ tab: v, open: null })}
           options={[
             { value: 'sprzet', label: 'Sprzęt', count: items.data?.length },
             { value: 'materialy', label: lowCount ? <span className="flex items-center gap-1">Materiały <AlertTriangle className="h-3.5 w-3.5 text-amber-400" /></span> : 'Materiały', count: consumables.data?.length },
+            { value: 'miejsca', label: <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Miejsca</span> },
+            { value: 'kategorie', label: <span className="flex items-center gap-1"><Tags className="h-3.5 w-3.5" /> Kategorie</span> },
           ]}
         />
+        {!dictionary && (<>
         <div className="flex flex-col gap-2 lg:flex-row">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Szukaj: nazwa, SKU, etykieta, opiekun, miejsce…" className="pl-9" type="search" />
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="sm:w-44" aria-label="Kategoria">
-              <option value="">Wszystkie kategorie</option>
-              {lookups.categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="sm:w-44" aria-label="Miejsce">
-              <option value="">Wszystkie miejsca</option>
-              {lookups.permanentLocations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <CategorySelect lookups={lookups} value={categoryId} onChange={setCategoryId} emptyLabel="Wszystkie kategorie" className="sm:w-48" />
+            <LocationSelect lookups={lookups} value={locationId} onChange={setLocationId} emptyLabel="Wszystkie miejsca" withBoxes className="sm:w-48" />
             {tab === 'sprzet' ? (
               <Select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="sm:w-44" aria-label="Status">
                 <option value="">Każdy status</option>
@@ -223,23 +234,21 @@ function Warehouse() {
           </button>
           {filtersActive && (
             <button
-              onClick={() => {
-                setQuery('');
-                setCategoryId('');
-                setLocationId('');
-                setStatus('');
-                setOnlyMine(false);
-                setOnlyLow(false);
-              }}
+              onClick={clearFilters}
               className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
             >
               <X className="h-3.5 w-3.5" /> Wyczyść filtry
             </button>
           )}
         </div>
+        </>)}
       </div>
 
-      {active.isError ? (
+      {tab === 'miejsca' ? (
+        <LocationsManager onShow={(id) => showFiltered({ locationId: id })} />
+      ) : tab === 'kategorie' ? (
+        <CategoriesManager onShow={(id) => showFiltered({ categoryId: id })} />
+      ) : active.isError ? (
         <ErrorState error={active.error} onRetry={() => active.refetch()} />
       ) : active.isPending ? (
         <ListSkeleton />
@@ -265,7 +274,7 @@ function Warehouse() {
         </ul>
       )}
 
-      {active.data && filtersActive && (
+      {!dictionary && active.data && filtersActive && (
         <p className="mt-3 text-center text-xs text-zinc-600">
           Pokazano {tab === 'sprzet' ? filteredItems.length : filteredConsumables.length} z {active.data.length}
         </p>

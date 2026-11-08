@@ -20,6 +20,19 @@ albo testuj na preview z Vercela.
 | Authentication → URL Configuration | Site URL: `https://ekoenergia-pms.vercel.app`, Redirect URLs: `https://ekoenergia-pms.vercel.app/**`, `https://*-eko-energia.vercel.app/**`, `http://localhost:3000/**` | Powroty z Google i magic linka |
 | Authentication → Providers → Google | Client ID/Secret z Google Cloud Console (OAuth client typu Web, redirect: `https://<ref>.supabase.co/auth/v1/callback`) | Logowanie jednym kliknięciem. Bez tego przycisk Google zwróci błąd, a email/hasło działa dalej |
 | Project Settings | Free tier pauzuje projekt po 7 dniach bez ruchu | Patrz „Uśpienie projektu” niżej |
+| Authentication → SMTP Settings | Własny SMTP (patrz niżej) | Reset hasła wysyła maila; wbudowany serwer Supabase puszcza ok. 2 maile/h na cały projekt |
+| Authentication → Rate Limits → Email sent | np. 30–60/h | Po włączeniu własnego SMTP limit trzeba podnieść ręcznie |
+
+### Maile (reset hasła) przez Gmail koła
+
+Najprostsza darmowa opcja bez domeny: osobne konto Gmail koła (np. `ekoenergia.magazyn@gmail.com`).
+
+1. Na tym koncie włącz weryfikację dwuetapową, potem utwórz **hasło aplikacji** (Konto Google → Bezpieczeństwo → Hasła do aplikacji).
+2. Supabase → Authentication → SMTP Settings: host `smtp.gmail.com`, port `587`, user = pełny adres Gmail, hasło = 16-znakowe hasło aplikacji, sender = ten sam adres, nazwa „Magazyn Eko-Energia”.
+3. Authentication → Rate Limits → Email sent: 30/h.
+4. Opcjonalnie: Authentication → Email Templates → „Reset Password” przetłumacz na polski.
+
+Limit Gmaila: 500 maili na dobę, przy kole kilkudziesięciu osób z dużym zapasem. Gdy koło kiedyś dostanie domenę: Resend albo Brevo (darmowe plany, lepsza dostarczalność, wymagają weryfikacji domeny/nadawcy).
 
 ## Vercel
 

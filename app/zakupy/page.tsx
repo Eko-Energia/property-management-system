@@ -276,7 +276,6 @@ function RequestForm({ open, record, onClose }: { open: boolean; record: Shoppin
       open={open}
       onClose={onClose}
       title={record ? 'Edytuj zgłoszenie' : 'Zgłoś zakup'}
-      dismissible={false}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

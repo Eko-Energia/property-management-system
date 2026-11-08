@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Boxes, Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,8 +29,16 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [busy, setBusy] = useState<null | 'password' | 'google' | 'magic'>(null);
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [busy, setBusy] = useState<null | 'password' | 'google' | 'reset'>(null);
+  const [sent, setSent] = useState<{ to: string; kind: 'confirm' | 'reset' } | null>(null);
+
+  // Google redirects away; coming back with the browser's Back button restores this
+  // page from the back/forward cache with the spinner still on -> reset it.
+  useEffect(() => {
+    const onShow = () => setBusy(null);
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
 
   const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const fail = (err: unknown) => toast.error(AUTH_ERRORS[(err as Error)?.message] ?? errorMessage(err));
@@ -52,7 +60,7 @@ function LoginForm() {
         });
         if (error) throw error;
         if (data.session) window.location.assign(next);
-        else setSentTo(email);
+        else setSent({ to: email, kind: 'confirm' });
       }
     } catch (err) {
       fail(err);
@@ -70,19 +78,21 @@ function LoginForm() {
     }
   };
 
-  const magicLink = async () => {
+  const forgotPassword = async () => {
     if (!email) {
-      toast.info('Wpisz adres email, wyślemy link do logowania.');
+      toast.info('Wpisz adres email, wyślemy link do ustawienia nowego hasła.');
       return;
     }
-    setBusy('magic');
-    const { error } = await getSupabase().auth.signInWithOtp({ email, options: { emailRedirectTo: callbackUrl() } });
+    setBusy('reset');
+    const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/nowe-haslo')}`,
+    });
     setBusy(null);
     if (error) fail(error);
-    else setSentTo(email);
+    else setSent({ to: email, kind: 'reset' });
   };
 
-  if (sentTo) {
+  if (sent) {
     return (
       <div className="space-y-3 text-center">
         <div className="mx-auto w-fit rounded-2xl bg-blue-500/10 p-3 text-blue-400">
@@ -90,9 +100,10 @@ function LoginForm() {
         </div>
         <p className="font-medium text-zinc-100">Sprawdź skrzynkę</p>
         <p className="text-sm text-zinc-400">
-          Wysłaliśmy link na <span className="text-zinc-200">{sentTo}</span>. Kliknij go na tym urządzeniu, żeby się zalogować.
+          Wysłaliśmy link na <span className="text-zinc-200">{sent.to}</span>.{' '}
+          {sent.kind === 'reset' ? 'Kliknij go, a ustawisz nowe hasło.' : 'Kliknij go, żeby potwierdzić konto.'} Sprawdź też spam.
         </p>
-        <Button variant="ghost" size="sm" onClick={() => setSentTo(null)}>
+        <Button variant="ghost" size="sm" onClick={() => setSent(null)}>
           Wróć
         </Button>
       </div>
@@ -147,8 +158,8 @@ function LoginForm() {
       </form>
 
       {mode === 'login' && (
-        <button onClick={magicLink} disabled={busy !== null} className="w-full text-center text-sm text-zinc-400 hover:text-zinc-200">
-          Nie pamiętasz hasła? <span className="text-blue-400">Wyślij link do logowania</span>
+        <button onClick={forgotPassword} disabled={busy !== null} className="w-full text-center text-sm text-zinc-400 hover:text-zinc-200">
+          {busy === 'reset' ? 'Wysyłanie…' : <>Nie pamiętasz hasła? <span className="text-blue-400">Ustaw nowe</span></>}
         </button>
       )}
     </div>

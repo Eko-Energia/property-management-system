@@ -1,22 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, KeyRound, MapPin, Pencil, Plus, RefreshCw, Shield, Tags, Trash2, User, Users, X } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Copy, GraduationCap, KeyRound, Loader2, Lock, RefreshCw, Shield, Trash2, User, UserX, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
-import { useConsumables, useItems, useJoinCode } from '@/lib/data/queries';
+import { useJoinCode } from '@/lib/data/queries';
 import { useLookups } from '@/lib/data/lookups';
-import { useDelete, useInsert, useUpdate } from '@/lib/data/mutations';
+import { rpc, useUpdate } from '@/lib/data/mutations';
 import { qk } from '@/lib/data/keys';
 import { getSupabase } from '@/lib/supabase/client';
 import { errorMessage } from '@/lib/errors';
 import { ROLE_LABEL } from '@/lib/format';
-import type { Category, Location, UserRole } from '@/lib/types';
+import type { Profile, UserRole } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Input, Select } from '@/components/ui/field';
+import { Input } from '@/components/ui/field';
 import { Badge, Card, Mono, PageHeader } from '@/components/ui/misc';
 import { useConfirm } from '@/components/ui/confirm';
-import { PersonSelect } from '@/components/inventory/pickers';
+import { cn } from '@/components/ui/cn';
+import { TOUR_EVENT } from '@/components/onboarding';
 import { useQueryClient } from '@tanstack/react-query';
 
 function Section({ icon: Icon, title, description, children, action }: { icon: typeof User; title: string; description?: string; children: React.ReactNode; action?: React.ReactNode }) {
@@ -43,12 +45,18 @@ export default function SettingsPage() {
   const { isAdmin } = useAuth();
   return (
     <>
-      <PageHeader title="Ustawienia" description={isAdmin ? 'Twoje konto oraz konfiguracja koła' : 'Twoje konto i słowniki magazynu'} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ProfileSection />
-        {isAdmin && <JoinCodeSection />}
-        <LocationsSection />
-        <CategoriesSection />
+      <PageHeader title="Ustawienia" description={isAdmin ? 'Twoje konto, członkowie i dostęp do koła' : 'Twoje konto i członkowie koła'} />
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <ProfileSection />
+          {isAdmin && <JoinCodeSection />}
+          <Link href="/magazyn?tab=miejsca" className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400 hover:text-zinc-200">
+            <span className="flex-1">
+              Miejsca w magazynie i kategorie są teraz w zakładkach <span className="text-zinc-200">Magazynu</span>.
+            </span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
         <MembersSection />
       </div>
     </>
@@ -77,6 +85,19 @@ function ProfileSection() {
           Zapisz
         </Button>
       </form>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link href="/nowe-haslo" className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-zinc-300 hover:bg-zinc-800">
+          <Lock className="h-4 w-4" /> Ustaw / zmień hasło
+        </Link>
+        <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: profile.id, values: { seen_tips: [] } }, {
+              onSuccess: async () => {
+                await qc.invalidateQueries({ queryKey: qk.me });
+                window.dispatchEvent(new Event(TOUR_EVENT));
+              },
+            })}>
+          <GraduationCap className="h-4 w-4" /> Pokaż samouczek
+        </Button>
+      </div>
     </Section>
   );
 }
@@ -124,198 +145,150 @@ function JoinCodeSection() {
   );
 }
 
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: 'guest', label: 'Brak dostępu' },
+  { value: 'member', label: 'Członek' },
+  { value: 'admin', label: 'Admin' },
+];
+
+const ROLE_ACTIVE: Record<UserRole, string> = {
+  guest: 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/40',
+  member: 'bg-zinc-700 text-white ring-1 ring-zinc-500',
+  admin: 'bg-blue-600/25 text-blue-100 ring-1 ring-blue-500/50',
+};
+
 function MembersSection() {
   const { isAdmin, profile: me } = useAuth();
   const lookups = useLookups();
-  const update = useUpdate('profiles', { invalidate: [qk.profiles], success: 'Zmieniono rolę' });
-
-  return (
-    <Section icon={Users} title={`Członkowie (${lookups.profiles.filter((p) => p.role !== 'guest').length})`} description={isAdmin ? 'Admin: zarząd. „Brak dostępu” odbiera prawo do danych.' : undefined}>
-      <ul className="divide-y divide-zinc-800/70">
-        {lookups.profiles.map((p) => (
-          <li key={p.id} className="flex items-center gap-3 py-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold uppercase text-zinc-300">{p.display_name.slice(0, 2)}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
-              {p.display_name} {p.id === me?.id && <span className="text-zinc-500">(Ty)</span>}
-            </span>
-            {isAdmin && p.id !== me?.id ? (
-              <>
-                <Select value={p.role} onChange={(e) => update.mutate({ id: p.id, values: { role: e.target.value as UserRole } })} className="h-8 w-36 text-xs" aria-label="Rola">
-                  <option value="guest">Brak dostępu</option>
-                  <option value="member">{ROLE_LABEL.member}</option>
-                  <option value="admin">{ROLE_LABEL.admin}</option>
-                </Select>
-
-              </>
-            ) : (
-              <Badge tone={p.role === 'admin' ? 'info' : p.role === 'guest' ? 'warning' : 'neutral'}>
-                {p.role === 'admin' && <Shield className="h-3 w-3" />} {ROLE_LABEL[p.role]}
-              </Badge>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-}
-
-function CategoriesSection() {
-  const { isAdmin } = useAuth();
-  const lookups = useLookups();
-  const items = useItems();
-  const consumables = useConsumables();
+  const qc = useQueryClient();
   const confirm = useConfirm();
-  const [draft, setDraft] = useState<{ id?: number; name: string; code: string } | null>(null);
-  const insert = useInsert('categories', { invalidate: [qk.categories], success: 'Dodano kategorię' });
-  const update = useUpdate('categories', { invalidate: [qk.categories, qk.items, qk.consumables], success: 'Zapisano' });
-  const remove = useDelete('categories', { invalidate: [qk.categories, qk.items, qk.consumables], success: 'Usunięto kategorię' });
+  const [pending, setPending] = useState<{ id: string; role?: UserRole; removing?: boolean } | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
 
-  const usage = (c: Category) => (items.data ?? []).filter((i) => i.category_id === c.id).length + (consumables.data ?? []).filter((x) => x.category_id === c.id).length;
+  const groups: { title: string; rows: Profile[] }[] = [
+    { title: 'Zarząd (admini)', rows: lookups.profiles.filter((p) => p.role === 'admin') },
+    { title: 'Członkowie', rows: lookups.profiles.filter((p) => p.role === 'member') },
+    { title: 'Bez dostępu (nie wpisali kodu albo odebrano dostęp)', rows: isAdmin ? lookups.profiles.filter((p) => p.role === 'guest') : [] },
+  ].filter((g) => g.rows.length > 0);
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!draft) return;
-    const values = { name: draft.name.trim(), code: draft.code.trim().toUpperCase() };
-    if (draft.id) await update.mutateAsync({ id: draft.id, values });
-    else await insert.mutateAsync(values);
-    setDraft(null);
+  const highlight = (id: string) => {
+    setFlash(id);
+    window.setTimeout(() => setFlash((f) => (f === id ? null : f)), 1500);
+  };
+
+  const setRole = async (p: Profile, role: UserRole) => {
+    if (role === p.role) return;
+    if (
+      role === 'admin' &&
+      !(await confirm({ title: `Nadać ${p.display_name} rolę admina?`, description: 'Admin zarządza członkami i kodem koła, może usuwać wyjazdy i kategorie.', confirmLabel: 'Nadaj admina', tone: 'primary' }))
+    )
+      return;
+    if (
+      role === 'guest' &&
+      !(await confirm({ title: `Odebrać dostęp ${p.display_name}?`, description: 'Konto zostaje, ale bez wglądu w magazyn. Dostęp przywrócisz jednym kliknięciem albo kodem koła.', confirmLabel: 'Odbierz dostęp' }))
+    )
+      return;
+    setPending({ id: p.id, role });
+    const { error } = await getSupabase().from('profiles').update({ role }).eq('id', p.id);
+    setPending(null);
+    if (error) {
+      toast.error(errorMessage(error));
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: qk.profiles });
+    highlight(p.id);
+    toast.success(role === 'guest' ? `${p.display_name}: odebrano dostęp` : `${p.display_name} ma teraz rolę: ${ROLE_LABEL[role]}`);
+  };
+
+  const remove = async (p: Profile) => {
+    const ok = await confirm({
+      title: `Usunąć konto ${p.display_name}?`,
+      description: 'Konto zostanie skasowane na stałe. Rzeczy pod jego/jej opieką zostaną bez opiekuna, historia zmian zostaje. Można potem założyć konto od nowa.',
+      confirmLabel: 'Usuń konto',
+    });
+    if (!ok) return;
+    setPending({ id: p.id, removing: true });
+    try {
+      await rpc('remove_member', { p_user_id: p.id });
+      toast.success(`Usunięto konto ${p.display_name}`);
+      await qc.invalidateQueries({ queryKey: qk.profiles });
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setPending(null);
+    }
   };
 
   return (
     <Section
-      icon={Tags}
-      title="Kategorie"
-      description="Kod kategorii tworzy prefiks SKU (np. EL → I-EL-0001)."
-      action={
-        <Button size="sm" variant="ghost" onClick={() => setDraft({ name: '', code: '' })}>
-          <Plus className="h-4 w-4" /> Dodaj
-        </Button>
-      }
+      icon={Users}
+      title={`Członkowie (${lookups.profiles.filter((p) => p.role !== 'guest').length})`}
+      description={isAdmin ? 'Zmień rolę jednym kliknięciem. Kosz usuwa konto na stałe.' : undefined}
     >
-      {draft && (
-        <form onSubmit={save} className="mb-3 flex gap-2">
-          <Input autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Nazwa, np. Elektronika" maxLength={60} required />
-          <Input
-            value={draft.code}
-            onChange={(e) => setDraft({ ...draft, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) })}
-            placeholder="KOD"
-            className="w-24 text-center font-mono"
-            required
-            minLength={2}
-            disabled={draft.code === 'BK' && Boolean(draft.id)}
-          />
-          <Button type="submit" size="icon" variant="primary" aria-label="Zapisz" loading={insert.isPending || update.isPending}>
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => setDraft(null)} aria-label="Anuluj">
-            <X className="h-4 w-4" />
-          </Button>
-        </form>
-      )}
-      <ul className="divide-y divide-zinc-800/70">
-        {lookups.categories.map((c) => (
-          <li key={c.id} className="flex items-center gap-3 py-2">
-            <Mono className="w-12 text-zinc-300">{c.code}</Mono>
-            <span className="flex-1 text-sm text-zinc-200">{c.name}</span>
-            <span className="text-xs text-zinc-500">{usage(c)} poz.</span>
-            <Button size="icon-sm" variant="ghost" onClick={() => setDraft({ id: c.id, name: c.name, code: c.code })} aria-label="Edytuj">
-              <Pencil className="h-4 w-4" />
-            </Button>
-            {isAdmin && c.code !== 'BK' && (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Usuń"
-                onClick={async () => {
-                  if (await confirm({ title: `Usunąć kategorię ${c.name}?`, description: `${usage(c)} pozycji dostanie kategorię „Bez kategorii” (SKU zmieni się na prefiks BK).` })) remove.mutate(c.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-}
-
-function LocationsSection() {
-  const lookups = useLookups();
-  const items = useItems();
-  const consumables = useConsumables();
-  const confirm = useConfirm();
-  const [draft, setDraft] = useState<{ id?: number; name: string; room: string; responsible_id: string | null } | null>(null);
-  const insert = useInsert('locations', { invalidate: [qk.locations], success: 'Dodano miejsce' });
-  const update = useUpdate('locations', { invalidate: [qk.locations], success: 'Zapisano' });
-  const remove = useDelete('locations', { invalidate: [qk.locations, qk.items, qk.consumables], success: 'Usunięto miejsce' });
-
-  const usage = (l: Location) => (items.data ?? []).filter((i) => i.location_id === l.id).length + (consumables.data ?? []).filter((x) => x.location_id === l.id).length;
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!draft) return;
-    const values = { name: draft.name.trim(), room: draft.room.trim() || null, responsible_id: draft.responsible_id };
-    if (draft.id) await update.mutateAsync({ id: draft.id, values });
-    else await insert.mutateAsync({ ...values, kind: 'permanent' });
-    setDraft(null);
-  };
-
-  return (
-    <Section
-      icon={MapPin}
-      title="Miejsca w magazynie"
-      description="Szafy, regały, półki. Skrzynie wyjazdowe tworzy się w wyjeździe."
-      action={
-        <Button size="sm" variant="ghost" onClick={() => setDraft({ name: '', room: '', responsible_id: null })}>
-          <Plus className="h-4 w-4" /> Dodaj
-        </Button>
-      }
-    >
-      {draft && (
-        <form onSubmit={save} className="mb-3 grid gap-2 rounded-xl border border-zinc-800 p-3 sm:grid-cols-2">
-          <Input autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Nazwa, np. Szafa A / półka 2" maxLength={80} required />
-          <Input value={draft.room} onChange={(e) => setDraft({ ...draft, room: e.target.value })} placeholder="Sala, np. B4 / 112" />
-          <PersonSelect lookups={lookups} value={draft.responsible_id} onChange={(v) => setDraft({ ...draft, responsible_id: v })} />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setDraft(null)}>
-              Anuluj
-            </Button>
-            <Button type="submit" variant="primary" loading={insert.isPending || update.isPending}>
-              Zapisz
-            </Button>
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <div key={g.title}>
+            <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{g.title}</h3>
+            <ul className="divide-y divide-zinc-800/70">
+              {g.rows.map((p) => {
+                const editable = isAdmin && p.id !== me?.id;
+                const busy = pending?.id === p.id;
+                return (
+                  <li key={p.id} className={cn('-mx-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-2 py-2 transition-colors duration-700', flash === p.id && 'bg-emerald-500/10')}>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold uppercase text-zinc-300">{p.display_name.slice(0, 2)}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                      {p.display_name} {p.id === me?.id && <span className="text-zinc-500">(Ty)</span>}
+                    </span>
+                    {editable ? (
+                      <div className="flex w-full items-center gap-1 sm:w-auto">
+                        <div role="radiogroup" aria-label={`Rola: ${p.display_name}`} className="flex flex-1 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5 sm:flex-none">
+                          {ROLE_OPTIONS.map((o) => {
+                            const active = p.role === o.value;
+                            const spinning = busy && pending?.role === o.value;
+                            return (
+                              <button
+                                key={o.value}
+                                role="radio"
+                                aria-checked={active}
+                                disabled={busy}
+                                onClick={() => setRole(p, o.value)}
+                                className={cn(
+                                  'flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:flex-none',
+                                  active ? ROLE_ACTIVE[o.value] : 'text-zinc-500 hover:text-zinc-200',
+                                )}
+                              >
+                                {spinning && <Loader2 className="h-3 w-3 animate-spin" />}
+                                {!spinning && active && o.value === 'admin' && <Shield className="h-3 w-3" />}
+                                {!spinning && active && o.value === 'guest' && <UserX className="h-3 w-3" />}
+                                {o.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => remove(p)}
+                          loading={busy && pending?.removing}
+                          disabled={busy}
+                          aria-label={`Usuń konto ${p.display_name}`}
+                          className="text-zinc-500 hover:text-red-300"
+                        >
+                          {!(busy && pending?.removing) && <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Badge tone={p.role === 'admin' ? 'info' : p.role === 'guest' ? 'warning' : 'neutral'}>
+                        {p.role === 'admin' && <Shield className="h-3 w-3" />} {ROLE_LABEL[p.role]}
+                      </Badge>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-        </form>
-      )}
-      {lookups.permanentLocations.length === 0 && !draft ? (
-        <p className="text-sm text-zinc-500">Dodaj pierwsze miejsce, żeby wiedzieć, gdzie co leży.</p>
-      ) : (
-        <ul className="divide-y divide-zinc-800/70">
-          {lookups.permanentLocations.map((l) => (
-            <li key={l.id} className="flex items-center gap-3 py-2">
-              <div className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-zinc-200">{l.name}</span>
-                <span className="text-xs text-zinc-500">
-                  {[l.room, lookups.person(l.responsible_id)?.display_name, `${usage(l)} poz.`].filter(Boolean).join(' · ')}
-                </span>
-              </div>
-              <Button size="icon-sm" variant="ghost" onClick={() => setDraft({ id: l.id, name: l.name, room: l.room ?? '', responsible_id: l.responsible_id })} aria-label="Edytuj">
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Usuń"
-                onClick={async () => {
-                  if (await confirm({ title: `Usunąć ${l.name}?`, description: usage(l) ? `${usage(l)} pozycji straci przypisane miejsce.` : 'Miejsce jest puste.' })) remove.mutate(l.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+        ))}
+      </div>
     </Section>
   );
 }
