@@ -20,6 +20,16 @@ albo testuj na preview z Vercela.
 | Authentication → URL Configuration | Site URL: `https://ekoenergia-pms.vercel.app`, Redirect URLs: `https://ekoenergia-pms.vercel.app/**`, `https://*-eko-energia.vercel.app/**`, `http://localhost:3000/**` | Powroty z Google i magic linka |
 | Authentication → Providers → Google | Client ID/Secret z Google Cloud Console (OAuth client typu Web, redirect: `https://<ref>.supabase.co/auth/v1/callback`) | Logowanie jednym kliknięciem. Bez tego przycisk Google zwróci błąd, a email/hasło działa dalej |
 | Project Settings | Free tier pauzuje projekt po 7 dniach bez ruchu | Patrz „Uśpienie projektu” niżej |
+| Authentication → Rate Limits → Email sent | jak najniżej | Aplikacja **nie wysyła maili** (reset hasła idzie kodem koła). Niski limit chroni przed nadużyciem |
+| Authentication → Providers → Email | „Secure password change”: OFF | Inaczej zmiana hasła w Ustawieniach wymagałaby kodu z maila |
+
+### Bez maili: kod koła i reset hasła
+
+- Kod koła liczy baza z sekretu i 15-minutowego okna czasu (`join_code_for`), bez crona. Ważny jest bieżący i poprzedni kod.
+- Każdy członek widzi aktualny kod w Ustawieniach. Admin może go unieważnić (nowy sekret).
+- „Nie pamiętasz hasła?” na ekranie logowania: email + kod koła + nowe hasło → RPC `reset_password_with_code`, które zmienia hasło w `auth.users` (bcrypt z pgcrypto). Admini są wyłączeni: ich hasło resetuje się przez Google albo w panelu Supabase.
+- Kompromis: kto zna aktualny kod i email członka, może zmienić mu hasło. Świadomy wybór (wygoda > bezpieczeństwo, w aplikacji nie ma tajnych danych).
+- Gdyby kiedyś wróciły maile: własny SMTP (np. Gmail koła z hasłem aplikacji, 500 maili/dobę) w Authentication → SMTP Settings.
 
 ## Vercel
 

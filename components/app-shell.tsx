@@ -7,6 +7,7 @@ import { Boxes, Home, Loader2, LogOut, Plane, Settings, ShoppingCart } from 'luc
 import { useAuth } from '@/lib/auth';
 import { useStats } from '@/lib/data/queries';
 import { GlobalScanButton } from '@/components/global-scan';
+import { Onboarding } from '@/components/onboarding';
 import { cn } from '@/components/ui/cn';
 import { ErrorState } from '@/components/ui/misc';
 
@@ -17,7 +18,7 @@ const NAV = [
   { href: '/zakupy', label: 'Zakupy', icon: ShoppingCart },
 ];
 
-const BARE_ROUTES = ['/login', '/dolacz', '/auth'];
+const BARE_ROUTES = ['/login', '/dolacz', '/auth', '/nowe-haslo'];
 
 function isActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
@@ -141,6 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </div>
       </nav>
+      <Onboarding />
     </div>
   );
 }

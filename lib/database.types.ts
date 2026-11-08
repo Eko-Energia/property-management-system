@@ -81,15 +81,15 @@ export type Database = {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; display_name: string; role: Database['public']['Enums']['user_role']; created_at: string };
-        Insert: { id: string; display_name: string; role?: Database['public']['Enums']['user_role']; created_at?: string };
-        Update: { display_name?: string; role?: Database['public']['Enums']['user_role'] };
+        Row: { id: string; display_name: string; role: Database['public']['Enums']['user_role']; created_at: string; seen_tips: string[] };
+        Insert: { id: string; display_name: string; role?: Database['public']['Enums']['user_role']; created_at?: string; seen_tips?: string[] };
+        Update: { display_name?: string; role?: Database['public']['Enums']['user_role']; seen_tips?: string[] };
         Relationships: [];
       };
       app_settings: {
-        Row: { id: boolean; join_code: string };
-        Insert: { id?: boolean; join_code: string };
-        Update: { join_code?: string };
+        Row: { id: boolean; join_secret: string };
+        Insert: { id?: boolean; join_secret?: string };
+        Update: { join_secret?: string };
         Relationships: [];
       };
       categories: {
@@ -112,6 +112,7 @@ export type Database = {
           event_id: number | null;
           room: string | null;
           responsible_id: string | null;
+          stored_at_id: number | null;
           created_at: string;
         };
         Insert: {
@@ -121,6 +122,7 @@ export type Database = {
           event_id?: number | null;
           room?: string | null;
           responsible_id?: string | null;
+          stored_at_id?: number | null;
         };
         Update: {
           name?: string;
@@ -128,6 +130,7 @@ export type Database = {
           event_id?: number | null;
           room?: string | null;
           responsible_id?: string | null;
+          stored_at_id?: number | null;
         };
         Relationships: [
           { foreignKeyName: 'locations_event_id_fkey'; columns: ['event_id']; isOneToOne: false; referencedRelation: 'events'; referencedColumns: ['id'] },
@@ -199,6 +202,11 @@ export type Database = {
       is_member: { Args: Record<string, never>; Returns: boolean };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       join_club: { Args: { p_code: string }; Returns: Database['public']['Enums']['user_role'] };
+      remove_member: { Args: { p_user_id: string }; Returns: undefined };
+      current_join_code: { Args: Record<string, never>; Returns: { code: string; expires_at: string }[] };
+      regenerate_join_code: { Args: Record<string, never>; Returns: undefined };
+      reset_password_with_code: { Args: { p_email: string; p_code: string; p_password: string }; Returns: undefined };
+      club_admins: { Args: Record<string, never>; Returns: string[] };
       ensure_profile: { Args: Record<string, never>; Returns: Database['public']['Tables']['profiles']['Row'] };
       next_sku: { Args: { p_kind: string; p_category_id: number | null }; Returns: string };
       lookup_code: {

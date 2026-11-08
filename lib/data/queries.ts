@@ -52,14 +52,30 @@ export const useStats = (enabled = true) =>
     queryFn: async () => (await unwrap(sb().rpc('dashboard_stats'))) as unknown as DashboardStats,
   });
 
+/** Rotating club code (changes every 15 min); refetches itself right after it expires. */
 export const useJoinCode = (enabled: boolean) =>
   useQuery({
     queryKey: qk.settings,
     enabled,
     queryFn: async () => {
-      const { data, error } = await sb().from('app_settings').select('join_code').single();
+      const { data, error } = await sb().rpc('current_join_code');
       if (error) throw error;
-      return data;
+      const row = (data as { code: string; expires_at: string }[])[0];
+      return { code: row.code, expiresAt: new Date(row.expires_at).getTime() };
+    },
+    refetchInterval: (query) => (query.state.data ? Math.max(1_000, query.state.data.expiresAt - Date.now() + 1_000) : false),
+    refetchIntervalInBackground: false,
+  });
+
+/** Names of admins; works signed out too (login / join screens). */
+export const useClubAdmins = () =>
+  useQuery({
+    queryKey: ['club_admins'],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await sb().rpc('club_admins');
+      if (error) throw error;
+      return (data ?? []) as string[];
     },
   });
 

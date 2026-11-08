@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Circle, PackagePlus, Pencil, Plus, Trash2, Undo2, X } from 'lucide-react';
+import { CheckCircle2, Circle, MapPin, PackagePlus, Pencil, Plus, Trash2, Undo2, User, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useConsumables, useEventConsumables, useItems } from '@/lib/data/queries';
 import { useLookups } from '@/lib/data/lookups';
 import { INVENTORY_KEYS, rpc, useAction, usePackConsumable, useUpdate } from '@/lib/data/mutations';
+import { BoxForm } from './box-form';
 import { qk } from '@/lib/data/keys';
 import { errorMessage } from '@/lib/errors';
 import { getSupabase } from '@/lib/supabase/client';
@@ -26,7 +27,7 @@ export function BoxPanel({ box, readOnly, onOpenItem }: { box: Location; readOnl
   const consumables = useConsumables();
   const ecs = useEventConsumables();
   const pack = usePackConsumable();
-  const [renaming, setRenaming] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [addingItems, setAddingItems] = useState(false);
   const [addingConsumable, setAddingConsumable] = useState(false);
   const [requiredQty, setRequiredQty] = useState(1);
@@ -41,7 +42,6 @@ export function BoxPanel({ box, readOnly, onOpenItem }: { box: Location; readOnl
     invalidate: [qk.items],
   });
   const removeItem = useAction({ fn: (item: Item) => rpc('return_item', { p_item_id: item.id }), invalidate: [qk.items], success: 'Zwrócono do magazynu' });
-  const rename = useUpdate('locations', { invalidate: [qk.locations] });
   const setRequired = useUpdate('event_consumables', { invalidate: [qk.eventConsumables] });
   const deleteBox = useAction({ fn: () => rpc('delete_box', { p_box_id: box.id }), invalidate: INVENTORY_KEYS, success: 'Usunięto skrzynię, zawartość wróciła na magazyn' });
 
@@ -85,36 +85,25 @@ export function BoxPanel({ box, readOnly, onOpenItem }: { box: Location; readOnl
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
-        {renaming !== null ? (
-          <form
-            className="flex flex-1 gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (renaming.trim()) rename.mutate({ id: box.id, values: { name: renaming.trim() } });
-              setRenaming(null);
-            }}
-          >
-            <Input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} className="h-9" />
-            <Button type="submit" size="sm" variant="primary">
-              OK
-            </Button>
-            <Button size="icon-sm" variant="ghost" onClick={() => setRenaming(null)} aria-label="Anuluj">
-              <X className="h-4 w-4" />
-            </Button>
-          </form>
-        ) : (
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold text-zinc-50">{box.name}</h3>
+          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+            <span className={cn('flex items-center gap-1', box.responsible_id ? 'text-zinc-400' : 'text-zinc-600')}>
+              <User className="h-3 w-3" /> {lookups.person(box.responsible_id)?.display_name ?? 'bez opiekuna'}
+            </span>
+            <span className={cn('flex items-center gap-1', box.stored_at_id ? 'text-zinc-400' : 'text-zinc-600')}>
+              <MapPin className="h-3 w-3" /> {lookups.locationLabel(box.stored_at_id) ?? 'miejsce nieznane'}
+            </span>
+          </div>
+        </div>
+        {!readOnly && (
           <>
-            <h3 className="flex-1 truncate font-semibold text-zinc-50">{box.name}</h3>
-            {!readOnly && (
-              <>
-                <Button size="icon-sm" variant="ghost" onClick={() => setRenaming(box.name)} aria-label="Zmień nazwę">
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button size="icon-sm" variant="ghost" onClick={onDeleteBox} aria-label="Usuń skrzynię" loading={deleteBox.isPending}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+            <Button size="icon-sm" variant="ghost" onClick={() => setEditing(true)} aria-label="Edytuj skrzynię">
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button size="icon-sm" variant="ghost" onClick={onDeleteBox} aria-label="Usuń skrzynię" loading={deleteBox.isPending}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </>
         )}
       </div>
@@ -220,6 +209,7 @@ export function BoxPanel({ box, readOnly, onOpenItem }: { box: Location; readOnl
         )}
       </section>
 
+      <BoxForm open={editing} onClose={() => setEditing(false)} eventId={box.event_id ?? 0} box={box} defaultName={box.name} />
       <Picker
         open={addingItems}
         onClose={() => setAddingItems(false)}

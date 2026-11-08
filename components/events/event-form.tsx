@@ -55,7 +55,6 @@ export function EventForm({ open, onClose, record }: { open: boolean; onClose: (
       open={open}
       onClose={onClose}
       title={record ? 'Edytuj wyjazd' : 'Nowy wyjazd'}
-      dismissible={false}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

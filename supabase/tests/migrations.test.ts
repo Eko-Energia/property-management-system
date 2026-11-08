@@ -58,7 +58,7 @@ describe('auth & RLS', () => {
 
   it('wrong join code is rejected', async () => {
     await expect(asUser(db, guest, (tx) => tx.query(`select public.join_club('nope')`)))
-      .rejects.toThrow(/Nieprawidłowy kod/);
+      .rejects.toThrow(/Nieprawidłowy albo wygasły kod/);
   });
 
   it('members cannot escalate their role, admins can change roles', async () => {

@@ -11,6 +11,7 @@ import { qk } from '@/lib/data/keys';
 import { errorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
+import { AdminsHint } from '@/components/admins-hint';
 
 function JoinForm() {
   const router = useRouter();
@@ -43,7 +44,7 @@ function JoinForm() {
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-sm text-zinc-400">
-        Cześć{profile ? `, ${profile.display_name}` : ''}! Wpisz kod koła, który dostaniesz od zarządu (jednorazowo, na tym koncie).
+        Cześć{profile ? `, ${profile.display_name}` : ''}! Wpisz kod koła (jednorazowo, na tym koncie). Kod ma każdy członek w Ustawieniach, zmienia się co 15 minut. <AdminsHint />
       </p>
       <Input
         autoFocus
