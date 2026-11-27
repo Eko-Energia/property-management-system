@@ -48,7 +48,10 @@ albo testuj na preview z Vercela.
 ## Uśpienie projektu (free tier)
 
 Supabase Free wstrzymuje projekt po tygodniu bez zapytań. Przywrócenie: dashboard albo MCP `restore_project`, trwa kilka minut.
-Jeśli to przeszkadza: plan Pro albo lekki cron (np. GitHub Actions co 3 dni wołający dowolny endpoint REST z kluczem publishable).
+**Keep-alive:** Vercel Cron (`vercel.json`) codziennie o 7:00 UTC woła `/api/keepalive`, a ten robi jedno prawdziwe zapytanie do bazy (`club_admins`). Dzięki temu projekt nie stoi 7 dni bez ruchu.
+- Działa tylko na deploymencie produkcyjnym. Podgląd wywołań: Vercel → Project → Settings → Cron Jobs (tam też ręczne „Run”).
+- Opcjonalnie: env `CRON_SECRET` w Vercelu. Vercel dołącza go jako `Authorization: Bearer …`, a route odrzuca wywołania bez niego.
+- Ping **nie wybudza** projektu, który już jest uśpiony. Wtedy Restore w panelu, a od następnego dnia cron pilnuje dalej.
 
 ## Kopie zapasowe
 

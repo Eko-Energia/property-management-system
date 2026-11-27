@@ -104,7 +104,7 @@ export function Tabs<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-            value === o.value ? 'bg-zinc-700 text-white shadow' : 'text-zinc-400 hover:text-zinc-200',
+            value === o.value ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200',
           )}
         >
           {o.label}
@@ -146,7 +146,7 @@ export function Stepper({
       >
         <Minus className="h-4 w-4" />
       </button>
-      <span className="min-w-[3.25rem] px-1 text-center text-sm font-semibold tabular-nums text-zinc-100">
+      <span className="min-w-13 px-1 text-center text-sm font-semibold tabular-nums text-zinc-100">
         {value}
         {suffix && <span className="ml-0.5 text-xs font-normal text-zinc-500">{suffix}</span>}
       </span>

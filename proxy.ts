@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from '@/lib/database.types';
 import { env } from '@/lib/env';
 
-const PUBLIC_PATHS = ['/login', '/auth'];
+const PUBLIC_PATHS = ['/login', '/auth', '/api/keepalive'];
 
 /**
  * Refreshes the Supabase session cookie on every request and sends

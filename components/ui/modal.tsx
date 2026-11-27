@@ -124,7 +124,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in"
+        className="absolute inset-0 bg-black/70 backdrop-blur-xs animate-in fade-in"
         onClick={dismissible ? onClose : undefined}
         aria-hidden
       />
@@ -135,7 +135,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[92dvh] w-full flex-col overflow-hidden border border-zinc-800 bg-zinc-950 shadow-2xl outline-none',
+          'relative flex max-h-[92dvh] w-full flex-col overflow-hidden border border-zinc-800 bg-zinc-950 shadow-2xl outline-hidden',
           'rounded-t-2xl sm:rounded-2xl animate-in slide-in-from-bottom',
           size === 'sm' && 'sm:max-w-md',
           size === 'md' && 'sm:max-w-lg',

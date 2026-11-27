@@ -81,3 +81,31 @@ describe('club_admins', () => {
     expect(res.rows.map((r) => r.club_admins)).toEqual(['Szef']);
   });
 });
+
+describe('advisor fixes (0008)', () => {
+  it('signed-out users cannot call members-only RPCs', async () => {
+    await expect(anon(`select * from public.current_join_code()`)).rejects.toThrow(/permission denied/);
+    await expect(anon(`select public.regenerate_join_code()`)).rejects.toThrow(/permission denied/);
+  });
+
+  it('trigger functions are not executable through the API, triggers still fire', async () => {
+    const res = await db.query<{ n: number }>(
+      `select count(*)::int as n from pg_proc p
+       where p.pronamespace = 'public'::regnamespace and p.prorettype = 'trigger'::regtype
+         and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))`,
+    );
+    expect(res.rows[0].n).toBe(0);
+    // touch_updated_at + audit_row fire for a signed-in member
+    await asUser(db, member, (tx) => tx.query(`update profiles set display_name = 'Member2' where id = $1`, [member]));
+    const p = await db.query<{ display_name: string }>(`select display_name from profiles where id = $1`, [member]);
+    expect(p.rows[0].display_name).toBe('Member2');
+  });
+
+  it('single update policy: self yes, other member no, admin yes', async () => {
+    const other = await signUp(db, 'other@test.pl', 'Other');
+    const r1 = await asUser(db, member, (tx) => tx.query(`update profiles set display_name = 'Hack' where id = $1 returning id`, [other]));
+    expect(r1.rows).toHaveLength(0);
+    const r2 = await asUser(db, admin, (tx) => tx.query(`update profiles set display_name = 'Fixed' where id = $1 returning id`, [other]));
+    expect(r2.rows).toHaveLength(1);
+  });
+});
