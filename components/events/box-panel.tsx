@@ -185,7 +185,7 @@ export function BoxPanel({ box, readOnly, onOpenItem }: { box: Location; readOnl
                             const v = Math.max(0, Number(e.target.value) || 0);
                             if (v !== line.quantity_required) setRequired.mutate({ id: line.id, values: { quantity_required: v } });
                           }}
-                          className="w-12 rounded border border-zinc-700 bg-zinc-900 px-1 text-center text-zinc-200"
+                          className="w-12 rounded-sm border border-zinc-700 bg-zinc-900 px-1 text-center text-zinc-200"
                         />
                       )}{' '}
                       · w magazynie {c?.quantity_stored ?? 0}

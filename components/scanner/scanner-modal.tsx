@@ -97,7 +97,7 @@ function ScannerOverlay({ onClose, onScan, title = 'Skanuj etykietę', hint, mod
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex flex-col bg-black text-zinc-100" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-60 flex flex-col bg-black text-zinc-100" role="dialog" aria-modal="true" aria-label={title}>
       <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="min-w-0">
           <p className="truncate text-base font-semibold">{title}</p>
@@ -151,7 +151,7 @@ function ScannerOverlay({ onClose, onScan, title = 'Skanuj etykietę', hint, mod
                 autoCapitalize="characters"
                 autoComplete="off"
                 placeholder="Numer etykiety lub SKU (np. 00045, I-EL-0001)"
-                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-center font-mono text-base tracking-wide placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
+                className="h-12 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-center font-mono text-base tracking-wide placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-zinc-500 focus:border-blue-500 focus:outline-hidden"
               />
               <button type="submit" disabled={!manual.trim()} className="h-12 w-full rounded-xl bg-blue-600 font-medium disabled:opacity-40">
                 Szukaj

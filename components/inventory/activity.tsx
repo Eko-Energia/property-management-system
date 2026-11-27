@@ -120,7 +120,7 @@ export function ActivityList({ table, rowId, limit = 20, showSubject = false }: 
         const { title, subject } = describeActivity(entry, lookups);
         return (
           <li key={entry.id} className="relative">
-            <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-zinc-950 bg-zinc-600" />
+            <span className="absolute left-[-21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-zinc-950 bg-zinc-600" />
             <p className="text-sm text-zinc-200">
               {showSubject && subject && <span className="font-medium text-zinc-50">{subject}: </span>}
               {title}

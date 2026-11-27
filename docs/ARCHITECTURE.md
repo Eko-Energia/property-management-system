@@ -4,7 +4,7 @@
 
 | Warstwa | Technologia | Dlaczego |
 |---|---|---|
-| Frontend | Next.js 16 (App Router), React 19, Tailwind 3 | Strony to Client Components: kamera, realtime, optimistic UI |
+| Frontend | Next.js 16 (App Router), React 19, Tailwind 4 (config w `app/globals.css`) | Strony to Client Components: kamera, realtime, optimistic UI |
 | Dane w UI | TanStack Query 5 | Jeden cache dla wszystkich stron, deduplikacja, optimistic updates z rollbackiem |
 | Backend | Supabase: Postgres 17, Auth, Realtime | Brak własnego serwera API, logika w SQL |
 | Hosting | Vercel (frontend), Supabase eu-central-1 | |

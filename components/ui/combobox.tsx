@@ -109,7 +109,7 @@ export function Combobox<V extends string | number>({ id, value, onChange, optio
         onKeyDown={onKeyDown}
         className={cn(
           'h-10 w-full rounded-xl border border-zinc-700 bg-zinc-900 pl-9 pr-16 text-sm text-zinc-100 placeholder:text-zinc-500',
-          'focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60',
+          'focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60',
           !open && !selected && 'placeholder:text-zinc-400',
         )}
       />
