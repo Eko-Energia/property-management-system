@@ -116,8 +116,8 @@ Przeniesienie repo do innej organizacji: repo → Settings → Danger Zone → T
    - Authentication → URL Configuration: Site URL i Redirect URLs z domeną aplikacji ([OPERATIONS.md](OPERATIONS.md)).
    - Authentication → Providers → Google: Client ID/Secret (pkt 4.4).
    - Authentication → Rate Limits → Email sent: nisko (aplikacja nie wysyła maili).
-4. **Uśpienie:** darmowy projekt pauzuje się po 7 dniach bez ruchu.
-   - Wybudzenie: panel Supabase → projekt → Restore. Dane zostają.
+4. **Uśpienie:** darmowy projekt pauzuje się po 7 dniach bez ruchu. Pilnuje tego codzienny Vercel Cron `/api/keepalive` ([OPERATIONS.md](OPERATIONS.md)). Po przeniesieniu projektu w Vercelu sprawdź, że cron dalej jest w Settings → Cron Jobs.
+   - Gdyby jednak się uśpił: panel Supabase → projekt → Restore. Dane zostają.
    - Po wybudzeniu aplikacja działa od razu.
 
 ### 4.4 Google Cloud (logowanie Google)
